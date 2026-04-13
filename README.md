@@ -1,19 +1,21 @@
 # 🏠 HA Smart Room Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.0.0-blue)
+![version](https://img.shields.io/badge/version-1.1.0-blue)
 ![HA](https://img.shields.io/badge/Home%20Assistant-2023.1+-green)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 > 🇻🇳 **Phiên bản tiếng Việt:** [README_vi.md](README_vi.md)
 
-A custom Home Assistant Lovelace card for full smart room control — live temperature & humidity sensors, multi-device control (lights, fan, outlet, AC, TV), power consumption display, motion & door sensors, auto-off mode, smart bar suggestions, environment graphs, and a full visual editor.
-
-**No extra plugins required. Works standalone, fully configurable through the built-in UI editor.**
+A custom Home Assistant Lovelace card for full smart room control — sensors, multi-device control, power graph, auto-off automation, and a complete visual editor. No plugins required.
 
 ---
 
 ## 📸 Preview
+
+
+### 🎬 Demo
+![Demo](assets/preview.gif)
 
 ### 🖼️ Screenshot
 ![Preview](assets/preview.png)
@@ -23,97 +25,131 @@ A custom Home Assistant Lovelace card for full smart room control — live tempe
 
 ---
 
-## ✨ Features (v1.0.0)
+## ✨ What's New in v1.1.0
+
+### 🧠 HA Smart Room Integration — the big upgrade
+The headline feature of v1.1. Instead of running automation logic inside the browser, the card now connects to a custom HA integration that runs **server-side on Home Assistant**. This means:
+
+- ✅ Auto-off works **even when the browser is closed**
+- ✅ State syncs **instantly across all devices** (phone, tablet, desktop)
+- ✅ No manual helper creation — the integration manages everything automatically
+- ✅ One-time setup, then it just works
+
+> **This is now the recommended sync mode.** Legacy `local` and `helpers` modes are still supported.
+
+### Other improvements in v1.1
+- 🔄 Smarter pending state handling — UI no longer flickers when toggling auto mode
+- 🧩 Safe 8-second disconnect timer — switching dashboards no longer triggers accidental unregister
+- 🐛 Various stability fixes for multi-card dashboards
+
+---
+
+## ✨ Full Feature List
 
 ### 🎨 Display & Interface
-- 🌡️ **Live temperature & humidity** — real-time indoor sensor display with comfort scoring
-- 🌤️ **Outdoor comparison** — compares indoor vs outdoor temp/humidity and gives smart suggestions
-- 📊 **Power consumption bar** — live watt display with animated fill bar for the outlet/socket
-- 🚪 **Door & motion sensors** — displays door open/close state and room occupancy
-- ❄️ **AC control** — full climate entity control integrated into the card
-- 📈 **Environment graph** — temperature and power history chart
-- 🏆 **Comfort score** — calculates and displays a room comfort score based on temp + humidity
+- 🌡️ **Live temperature & humidity** with comfort score (emoji + colour)
+- 🌤️ **Indoor/outdoor comparison** — contextual suggestions (open window, turn on AC, take umbrella...)
+- 📊 **Power consumption bar** — live watt display on outlet card
+- 🚪 **Door & motion sensors** — state shown in header
+- 📈 **6-hour environment graph** — temperature + power history with AC/door/motion timeline
+- 🏆 **Comfort score** — calculated from temp, humidity, fan & AC state
 
 ### 🔌 Multi-Device Control
-- 💡 **Main light** — brightness slider, on/off toggle
-- ✨ **Decor light** — on/off toggle
-- 🏮 **Porch light** — on/off toggle
+- 💡 **Main light** — brightness slider + toggle
+- ✨ **Decor light** — toggle
+- 🏮 **Porch light** — toggle
 - 🌈 **RGB light** — effect selector + colour picker modal
-- 🌀 **Fan** — speed popup (5 levels), spin animation
-- 🔌 **Outlet/Socket** — confirm-before-toggle popup, live power display with animated bar
-- 📺 **Smart TV** — volume slider, remote control panel
-- ➕ **Add custom devices** — add unlimited extra devices (light, RGB, fan, outlet, TV, sensor) via visual editor
+- 🌀 **Fan** — 5-speed popup + spin animation
+- 🔌 **Outlet** — confirm popup + live power bar
+- 📺 **Smart TV** — volume slider + remote panel
+- ❄️ **Air conditioner** — full climate entity control
+- ➕ **Unlimited custom devices** — add any device type via the visual editor
 
-### 🤖 Auto-Off Mode
-- **Motion-triggered auto-off** — when the room is empty for a configurable delay, all selected devices turn off automatically
-- **Countdown timer** — live countdown displayed on the card
-- **Manual / Auto toggle** — switch modes directly from the card header
-- **Sync via HA helpers** — optionally sync auto mode state across devices using `input_boolean` + `input_number` helpers
-
-### 💡 Smart Bar
-- Analyses room conditions (temperature, humidity, motion, door state) and gives contextual suggestions
-- Examples: *"Room hotter than outside — consider turning on AC"*, *"Room empty — lights still on"*
+### 🤖 Auto-Off Automation
+- Turns off selected devices after X minutes of no motion
+- Live countdown displayed on card
+- Manual / Auto toggle button in header
+- **3 sync modes:** Local · HA Helpers · HA Integration *(recommended)*
 
 ### 🎨 Visual Customisation
-- **Background presets** — Default, Night, Sunset, Forest, Aurora, Desert, Ocean, Cherry, Volcano, Galaxy, Ice, Olive, Slate, Rose, Teal, Custom
-- **Custom colours** — bg gradient, accent, text
-- **Custom background transparency** — slider for bg alpha
+- 16 background presets: Default, Night, Sunset, Forest, Aurora, Desert, Ocean, Cherry, Volcano, Galaxy, Ice, Olive, Slate, Rose, Teal, Custom
+- Custom gradient colours + transparency slider
 
-### 🌐 Multi-language Support (11 languages)
-- 🇻🇳 Tiếng Việt / 🇬🇧 English / 🇩🇪 Deutsch / 🇫🇷 Français / 🇳🇱 Nederlands
-- 🇵🇱 Polski / 🇸🇪 Svenska / 🇭🇺 Magyar / 🇨🇿 Čeština / 🇮🇹 Italiano / 🇵🇹 Português
+### 🌐 Multi-language (11 languages)
+🇻🇳 Vietnamese · 🇬🇧 English · 🇩🇪 Deutsch · 🇫🇷 Français · 🇳🇱 Nederlands · 🇵🇱 Polski · 🇸🇪 Svenska · 🇭🇺 Magyar · 🇨🇿 Čeština · 🇮🇹 Italiano · 🇵🇹 Português
 
 ### 🎛️ Visual Config Editor
-- Full drag-and-drop style device management: add, remove, reorder, rename devices
-- Per-device entity picker, MDI icon override
-- Automation settings: delay, entity selection, helper sync
-- Display toggles: show/hide score, graph, smart bar, auto mode button
-- Language, background, colour pickers — all in-UI, no YAML required
+- Add, remove, reorder, rename devices — no YAML needed
+- Per-device entity picker + MDI icon override
+- All display options, automation settings, and colours configurable in-UI
 
 ---
 
 ## 📦 Installation
 
-### Option 1 — HACS (recommended)
+### Part 1 — Install the Card (this repo)
 
-**Step 1:** Add Custom Repository to HACS:
+**Step 1:** Add to HACS:
 
 [![Open HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=doanlong1412&repository=ha-smart-room-card&category=plugin)
 
-> If the button doesn't work, add manually:
+> If the button doesn't work:
 > **HACS → Frontend → ⋮ → Custom repositories**
-> → URL: `https://github.com/doanlong1412/ha-smart-room-card` → Type: **Dashboard** → Add
+> URL: `https://github.com/doanlong1412/ha-smart-room-card` → Type: **Dashboard** → Add
 
-**Step 2:** Search for **HA Smart Room Card** → **Install**
+**Step 2:** Search **HA Smart Room Card** → Install
 
-**Step 3:** Hard-reload your browser (`Ctrl+Shift+R`)
+**Step 3:** Hard-reload browser (`Ctrl+Shift+R`)
 
 ---
 
-### Option 2 — Manual
-
+#### Manual install (alternative)
 1. Download [`ha-smart-room-card.js`](https://github.com/doanlong1412/ha-smart-room-card/releases/latest)
 2. Copy to `/config/www/ha-smart-room-card.js`
-3. Go to **Settings → Dashboards → Resources** → **Add resource**:
+3. Go to **Settings → Dashboards → Resources → Add resource**:
    ```
    URL:  /local/ha-smart-room-card.js
    Type: JavaScript module
    ```
-4. Hard-reload your browser (`Ctrl+Shift+R`)
+4. Hard-reload browser
+
+---
+
+### Part 2 — Install the Integration *(recommended for auto-off)*
+
+The **HA Smart Room Integration** lives in a separate repository and makes automation run server-side — working 24/7 regardless of whether the browser is open.
+
+> 📖 **Full installation guide:** [github.com/doanlong1412/ha-smart-room](https://github.com/doanlong1412/ha-smart-room)
+
+**Quick steps:**
+
+**Step 1:** In HACS, go to **Integrations → ⋮ → Custom repositories**
+
+Add:
+```
+URL:  https://github.com/doanlong1412/ha-smart-room
+Type: Integration
+```
+
+**Step 2:** Search **HA Smart Room** → **Install** → **Restart Home Assistant**
+
+**Step 3:** Go to **Settings → Devices & Services → Add Integration** → search **HA Smart Room** → complete setup
+
+**Step 4:** In the card editor, go to **Automation → Sync mode → 🧠 HA Smart Room Integration** → Save
+
+The card automatically registers each room with the integration. Auto-off now runs entirely on the server.
 
 ---
 
 ## ⚙️ Configuration
 
-### Step 1 — Add the card
-
+### Quick start
 ```yaml
 type: custom:ha-smart-room-card
 ```
+Add the card, then click **✏️ Edit** — everything is configurable in the UI.
 
-After adding, click **✏️ Edit** to open the visual Config Editor — no manual YAML needed.
-
-### Step 2 — Full YAML example
+### Full YAML example
 
 ```yaml
 type: custom:ha-smart-room-card
@@ -123,10 +159,11 @@ background_preset: default
 bg_alpha: 91
 show_score: true
 show_graph: true
-show_smart_bar: true
+show_env_hint: true
 show_auto_mode: true
+show_timeline: true
 auto_delay_min: 5
-sync_mode: local          # local | helpers
+sync_mode: integration      # integration | helpers | local
 
 # Sensors
 temp_entity: sensor.room_temperature
@@ -144,12 +181,12 @@ hien_entity: light.porch_light
 rgb_entity: light.rgb_strip
 quat_entity: fan.ceiling_fan
 ocam_entity: switch.outlet
-ocam_power_entity: sensor.outlet_power   # optional power sensor for outlet
+ocam_power_entity: sensor.outlet_power
 tv_entity: media_player.smart_tv
 tv_remote_entity: remote.tv_remote
 ac_entity: climate.air_conditioner
 
-# Auto-off
+# Auto-off device list
 auto_off_entities:
   - den
   - decor
@@ -158,54 +195,54 @@ auto_off_entities:
   - quat
   - ocam
   - ac
-
-# Optional — sync auto mode via HA helpers (sync_mode: helpers)
-helper_bool: input_boolean.hsrc_auto_mode
-helper_num: input_number.hsrc_no_motion_since
 ```
 
-### Available config keys
+### Config reference
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `language` | string | `vi` | Interface language (`vi`, `en`, `de`, `fr`, `nl`, `pl`, `sv`, `hu`, `cs`, `it`, `pt`) |
+| `language` | string | `vi` | UI language (`vi` `en` `de` `fr` `nl` `pl` `sv` `hu` `cs` `it` `pt`) |
 | `room_title` | string | `Smart Room` | Room name shown in header |
 | `background_preset` | string | `default` | Background gradient preset |
 | `bg_alpha` | number | `91` | Background transparency (0–100) |
 | `show_score` | bool | `true` | Show comfort score |
 | `show_graph` | bool | `true` | Show environment graph |
-| `show_smart_bar` | bool | `true` | Show smart suggestion bar |
-| `show_auto_mode` | bool | `true` | Show auto-off mode button |
+| `show_env_hint` | bool | `true` | Show indoor/outdoor comparison bar |
+| `show_auto_mode` | bool | `true` | Show auto-off button |
+| `show_timeline` | bool | `true` | Show AC/door/motion event timeline |
 | `auto_delay_min` | number | `5` | Minutes of no motion before auto-off |
-| `sync_mode` | string | `local` | `local` = localStorage only, `helpers` = sync via HA helpers |
+| `sync_mode` | string | `integration` | `integration` · `helpers` · `local` |
 | `temp_entity` | entity | — | Indoor temperature sensor |
 | `humi_entity` | entity | — | Indoor humidity sensor |
-| `power_entity` | entity | — | Power sensor (shown on outlet card) |
+| `power_entity` | entity | — | Power sensor |
 | `door_entity` | entity | — | Door binary sensor |
 | `motion_entity` | entity | — | Motion binary sensor |
 | `temp_out_entity` | entity | — | Outdoor temperature sensor |
 | `humi_out_entity` | entity | — | Outdoor humidity sensor |
-| `den_entity` | entity | — | Main light entity |
-| `decor_entity` | entity | — | Decor light entity |
-| `hien_entity` | entity | — | Porch light entity |
-| `rgb_entity` | entity | — | RGB light entity |
-| `quat_entity` | entity | — | Fan entity (`fan.*` or `switch.*`) |
-| `ocam_entity` | entity | — | Outlet switch entity |
+| `den_entity` | entity | — | Main light |
+| `decor_entity` | entity | — | Decor light |
+| `hien_entity` | entity | — | Porch light |
+| `rgb_entity` | entity | — | RGB light |
+| `quat_entity` | entity | — | Fan (`fan.*` or `switch.*`) |
+| `ocam_entity` | entity | — | Outlet switch |
 | `ocam_power_entity` | entity | — | Outlet power sensor (optional) |
 | `tv_entity` | entity | — | Smart TV media player |
-| `tv_remote_entity` | entity | — | TV remote entity |
+| `tv_remote_entity` | entity | — | TV remote |
 | `ac_entity` | entity | — | Air conditioner climate entity |
-| `helper_bool` | entity | `input_boolean.hsrc_auto_mode` | Helper for auto mode sync |
-| `helper_num` | entity | `input_number.hsrc_no_motion_since` | Helper for motion timestamp sync |
+| `helper_bool` | entity | — | `input_boolean` for helpers sync mode |
+| `helper_num` | entity | — | `input_number` for helpers sync mode |
 
 ---
 
-## 🤖 Auto-Off Helpers (optional)
+## 🤖 Sync Mode Details
 
-To sync the auto-off mode across multiple devices/browsers, create these helpers in HA:
+### 🧠 Integration mode *(recommended)*
+Requires the [HA Smart Room Integration](https://github.com/doanlong1412/ha-smart-room). Automation runs server-side — works 24/7 regardless of browser state. The card auto-registers each room on first save.
+
+### 🔘 Helpers mode
+Works across devices without the integration. Requires two helpers:
 
 ```yaml
-# configuration.yaml  (or create via Settings → Helpers)
 input_boolean:
   hsrc_auto_mode:
     name: HSRC Auto Mode
@@ -219,7 +256,10 @@ input_number:
     mode: box
 ```
 
-Then set `sync_mode: helpers` in the card config.
+Set `sync_mode: helpers` and assign both helpers in the card editor.
+
+### 💾 Local mode
+State saved in browser `localStorage` only. Simplest option — no setup needed, but doesn't sync across devices and stops when the browser closes.
 
 ---
 
@@ -230,32 +270,36 @@ Then set `sync_mode: helpers` in the card config.
 | Home Assistant | 2023.1+ |
 | Lovelace | Default & custom dashboards |
 | Devices | Mobile & Desktop |
-| Dependencies | None — fully standalone |
+| Dependencies | None (card standalone) |
+| Integration | Optional — [ha-smart-room](https://github.com/doanlong1412/ha-smart-room) |
 | Browsers | Chrome, Firefox, Safari, Edge |
 
 ---
 
 ## 📋 Changelog
 
+### v1.1.0 — *(current)*
+- 🧠 **HA Smart Room Integration** support — server-side automation, runs without browser
+- 🔄 Pending state guard — no UI flicker when toggling auto mode
+- 🧩 Safe 8-second disconnect timer — switching dashboards no longer unregisters the room
+- 🐛 Stability fixes for multi-card dashboards
+- 🌐 Full integration mode UI in visual editor with step-by-step setup guide
+
 ### v1.0.0
-- 🚀 Initial release under new name **HA Smart Room Card**
-- 🔌 Outlet power sensor support — dedicated `ocam_power_entity` field in editor and card
-- 🌀 Fan domain support — picker now accepts `fan.*` entities in addition to `switch.*`
-- 🛠️ Visual editor: fixed "Add device" button not showing new device immediately
-- 🛠️ Fixed duplicate event listener accumulation on device list re-render
-- ➕ Extra device support: add unlimited custom devices via editor (light, RGB, fan, outlet, TV, sensor)
-- 🔌 Extra outlet devices show live power bar when a power sensor is configured
-- 🌐 11 languages supported
+- 🚀 Initial internal release
+- Multi-device control, comfort score, 6h graph, smart hints
+- 11 languages, 16 background presets, visual editor
+- Auto-off with local & helpers sync
 
 ---
 
 ## 📄 License
 
-MIT License — free to use, modify, and distribute.
-If you find this useful, please ⭐ **star the repo**!
+MIT — free to use, modify, and distribute. If you find this useful, please ⭐ **star the repo**!
 
 ---
 
 ## 🙏 Credits
 
 Designed and developed by **[@doanlong1412](https://github.com/doanlong1412)** from 🇻🇳 Vietnam.
+Follow on TikTok: [@long.1412](https://www.tiktok.com/@long.1412)
