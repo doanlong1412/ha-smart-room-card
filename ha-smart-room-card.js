@@ -36,10 +36,12 @@ class HASmartRoomCard extends HTMLElement {
   static get ENTITIES() { return {}; }
 
   // ─── HASS setter ───────────────────────────────────────────────────────────
-  set hass(hass) {
+  set hass(hass) { return this._hassAsync(hass); }
+  async _hassAsync(hass) {
     this._hass = hass;
+    this._lastHass = hass; // lưu để dùng trong disconnectedCallback
     if (!this._rendered) {
-      this._render();
+      await this._render();
       this._rendered = true;
     } else {
       this._update();
@@ -48,6 +50,22 @@ class HASmartRoomCard extends HTMLElement {
     // ── Integration mode: đọc state từ entities do integration quản lý ─────────
     if (this._useIntegration && this._rendered) {
       const intOn = this._readAutoModeFromIntegration();
+
+      // _integrationPending: ta vừa ghi switch, chờ HA xác nhận state khớp
+      // → chỉ tắt flag khi HA đã phản hồi đúng giá trị ta muốn
+      if (this._integrationPending) {
+        if (intOn === this._integrationPendingTarget) {
+          // HA đã xác nhận → xoá flag, sync bình thường
+          this._integrationPending = false;
+          this._integrationPendingTarget = undefined;
+        } else {
+          // HA chưa cập nhật kịp → bỏ qua lần này, giữ nguyên UI
+          const remaining = this._readCountdownFromIntegration();
+          if (remaining !== null) this._updateAutoCountdown(remaining * 1000);
+          return;
+        }
+      }
+
       if (!this._helperSynced || intOn !== this._autoMode) {
         this._helperSynced = true;
         this._autoMode = intOn;
@@ -101,10 +119,17 @@ class HASmartRoomCard extends HTMLElement {
 
   setConfig(config) {
     this._config = config;
-    const titleSlug = (config.title || config.room || config.type || 'default')
-      .toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30);
+    // Ưu tiên room_title (field riêng của card) → title → room
+    // KHÔNG dùng config.type vì nó luôn = 'custom:ha-smart-room-card'
+    // → mọi card sẽ bị cùng room_id nếu không đặt title
+    const roomName = config.room_title || config.title || config.room || '';
+    const titleSlug = roomName
+      ? roomName.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30)
+      : 'default';
     this._cardId = 'hsrc_' + titleSlug;
     this._autoMode = localStorage.getItem(this._cardId + '_auto') === '1';
+    // Mặc định dùng integration nếu chưa từng chọn sync_mode
+    if (!this._config.sync_mode) this._config = { ...this._config, sync_mode: 'integration' };
     this._initEntities();
     // Apply entity overrides from visual editor
     const E = this.ENTITIES;
@@ -154,6 +179,57 @@ class HASmartRoomCard extends HTMLElement {
   }
 
   getCardSize() { return 5; }
+
+  // ─── Web Component lifecycle ───────────────────────────────────────────────
+  connectedCallback() {
+    // Card được gắn lại (chuyển dashboard quay lại) → huỷ timer unregister nếu đang đếm
+    if (this._unregisterTimer) {
+      clearTimeout(this._unregisterTimer);
+      this._unregisterTimer = null;
+      console.log('[HASmartRoom] Re-connected — cancelled pending unregister for', this._roomId);
+    }
+    // Nếu đã render rồi (quay lại từ dashboard khác) → re-register + force sync lại trạng thái nút
+    if (this._rendered && this._useIntegration && this._hass) {
+      // Reset flag để _hassAsync force-sync lại trạng thái nút từ switch entity
+      this._helperSynced = false;
+      this._registerWithIntegration().then(() => {
+        // Sau khi register xong, đọc lại trạng thái từ HA entity
+        const intOn = this._readAutoModeFromIntegration();
+        this._autoMode = intOn;
+        this._syncModeButtonUI();
+        this._updateHeader();
+        if (this._autoMode) this._autoEngineStart();
+        else this._autoEngineStop();
+      });
+    }
+  }
+
+  disconnectedCallback() {
+    // Dọn dẹp timer UI ngay lập tức
+    if (this._graphTimer)  { clearInterval(this._graphTimer);  this._graphTimer  = null; }
+    if (this._autoTimer)   { clearInterval(this._autoTimer);   this._autoTimer   = null; }
+
+    // QUAN TRỌNG: KHÔNG unregister ngay — chuyển dashboard cũng gọi disconnectedCallback.
+    // Dùng timer 8s: nếu card reconnect trong 8s (chuyển tab/dashboard) → huỷ timer, không xoá.
+    // Chỉ thực sự unregister khi card bị xoá khỏi dashboard vĩnh viễn.
+    if (this._useIntegration) {
+      const hass = this._lastHass || this._hass;
+      const roomId = this._roomId;
+      if (this._unregisterTimer) clearTimeout(this._unregisterTimer);
+      this._unregisterTimer = setTimeout(() => {
+        this._unregisterTimer = null;
+        if (!hass) return;
+        try {
+          hass.callService('ha_smart_room', 'unregister_room', { room_id: roomId });
+          console.log('[HASmartRoom] Unregistered room (card removed):', roomId);
+        } catch(e) {
+          console.warn('[HASmartRoom] Failed to unregister room:', e);
+        }
+      }, 8000); // 8 giây — đủ để chuyển dashboard rồi quay lại mà không mất entities
+      console.log('[HASmartRoom] Disconnected — pending unregister in 8s for', roomId);
+    }
+    this._lastHass = null;
+  }
 
   // ─── Auto-off Engine ───────────────────────────────────────────────────────
   //
@@ -252,6 +328,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Trong: --°C · Ngoài: --°C',
         scoring: 'Đang tính...',
         fanRunning: 'Đang chạy',
+        confirmOn: 'Đang TẮT — xác nhận để bật',
+        confirmOff: 'Đang BẬT — xác nhận để tắt',
+        confirmActionOn: 'BẬT',
+        confirmActionOff: 'TẮT',
+        confirmCancel: 'Huỷ',
+        confirmDevFallback: 'ổ cắm',
+        trendUp: 'Đang tăng',
+        trendDown: 'Đang giảm',
+        aspTitle: '⚙️ Cài đặt tự động tắt',
+        aspDelayUnit: 'phút',
+        aspDevTitle: '🔌 Thiết bị sẽ tắt',
+        colorSensorHdr: '🌡 Cảm biến & Header',
+        colorDevHdr: '💡 Thiết bị',
+        colorTemp: '🌡 Màu nhiệt độ',
+        colorHumi: '💧 Màu độ ẩm',
+        colorScore: '⭐ Màu điểm phòng',
+        colorDen: '💡 Đèn chính (bật)',
+        colorRgb: '🌈 Đèn RGB (bật)',
+        colorQuat: '🌀 Quạt (bật)',
+        delDevTitle: 'Xóa thiết bị',
+        rgbBtnLabel: 'Effect & Màu',
       },
       en: {
         tempLabel: 'Temperature', humiLabel: 'Humidity',
@@ -336,6 +433,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Inside: --°C · Outside: --°C',
         scoring: 'Calculating...',
         fanRunning: 'Running',
+        confirmOn: 'Currently OFF — confirm to turn on',
+        confirmOff: 'Currently ON — confirm to turn off',
+        confirmActionOn: 'TURN ON',
+        confirmActionOff: 'TURN OFF',
+        confirmCancel: 'Cancel',
+        confirmDevFallback: 'outlet',
+        trendUp: 'Rising',
+        trendDown: 'Falling',
+        aspTitle: '⚙️ Auto-off settings',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Devices to turn off',
+        colorSensorHdr: '🌡 Sensors & Header',
+        colorDevHdr: '💡 Devices',
+        colorTemp: '🌡 Temperature color',
+        colorHumi: '💧 Humidity color',
+        colorScore: '⭐ Score color',
+        colorDen: '💡 Main light (on)',
+        colorRgb: '🌈 RGB light (on)',
+        colorQuat: '🌀 Fan (on)',
+        delDevTitle: 'Remove device',
+        rgbBtnLabel: 'Effect & Color',
       },
       de: {
         tempLabel: 'Temperatur', humiLabel: 'Luftfeuchtigkeit',
@@ -420,6 +538,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Innen: --°C · Außen: --°C',
         scoring: 'Berechne...',
         fanRunning: 'Läuft',
+        confirmOn: 'Aktuell AUS — bestätigen zum Einschalten',
+        confirmOff: 'Aktuell AN — bestätigen zum Ausschalten',
+        confirmActionOn: 'EINSCHALTEN',
+        confirmActionOff: 'AUSSCHALTEN',
+        confirmCancel: 'Abbrechen',
+        confirmDevFallback: 'Steckdose',
+        trendUp: 'Steigend',
+        trendDown: 'Fallend',
+        aspTitle: '⚙️ Auto-Aus Einstellungen',
+        aspDelayUnit: 'Min',
+        aspDevTitle: '🔌 Geräte ausschalten',
+        colorSensorHdr: '🌡 Sensoren & Header',
+        colorDevHdr: '💡 Geräte',
+        colorTemp: '🌡 Temperaturfarbe',
+        colorHumi: '💧 Feuchtigkeitsfarbe',
+        colorScore: '⭐ Bewertungsfarbe',
+        colorDen: '💡 Hauptlicht (an)',
+        colorRgb: '🌈 RGB-Licht (an)',
+        colorQuat: '🌀 Ventilator (an)',
+        delDevTitle: 'Gerät entfernen',
+        rgbBtnLabel: 'Effekt & Farbe',
       },
       fr: {
         tempLabel: 'Température', humiLabel: 'Humidité',
@@ -504,6 +643,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Intérieur: --°C · Extérieur: --°C',
         scoring: 'Calcul...',
         fanRunning: 'En marche',
+        confirmOn: 'Actuellement ÉTEINT — confirmer pour allumer',
+        confirmOff: 'Actuellement ALLUMÉ — confirmer pour éteindre',
+        confirmActionOn: 'ALLUMER',
+        confirmActionOff: 'ÉTEINDRE',
+        confirmCancel: 'Annuler',
+        confirmDevFallback: 'prise',
+        trendUp: 'En hausse',
+        trendDown: 'En baisse',
+        aspTitle: '⚙️ Paramètres auto-extinction',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Appareils à éteindre',
+        colorSensorHdr: '🌡 Capteurs & En-tête',
+        colorDevHdr: '💡 Appareils',
+        colorTemp: '🌡 Couleur température',
+        colorHumi: '💧 Couleur humidité',
+        colorScore: '⭐ Couleur score',
+        colorDen: '💡 Lumière principale (allumée)',
+        colorRgb: '🌈 Lumière RGB (allumée)',
+        colorQuat: '🌀 Ventilateur (allumé)',
+        delDevTitle: 'Supprimer appareil',
+        rgbBtnLabel: 'Effet & Couleur',
       },
       nl: {
         tempLabel: 'Temperatuur', humiLabel: 'Luchtvochtigheid',
@@ -588,6 +748,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Binnen: --°C · Buiten: --°C',
         scoring: 'Berekenen...',
         fanRunning: 'Loopt',
+        confirmOn: 'Momenteel UIT — bevestigen om in te schakelen',
+        confirmOff: 'Momenteel AAN — bevestigen om uit te schakelen',
+        confirmActionOn: 'INSCHAKELEN',
+        confirmActionOff: 'UITSCHAKELEN',
+        confirmCancel: 'Annuleren',
+        confirmDevFallback: 'stopcontact',
+        trendUp: 'Stijgend',
+        trendDown: 'Dalend',
+        aspTitle: '⚙️ Auto-uit instellingen',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Apparaten uitschakelen',
+        colorSensorHdr: '🌡 Sensoren & Header',
+        colorDevHdr: '💡 Apparaten',
+        colorTemp: '🌡 Temperatuurkleur',
+        colorHumi: '💧 Vochtigheidskleur',
+        colorScore: '⭐ Scorecolor',
+        colorDen: '💡 Hoofdlamp (aan)',
+        colorRgb: '🌈 RGB-lamp (aan)',
+        colorQuat: '🌀 Ventilator (aan)',
+        delDevTitle: 'Apparaat verwijderen',
+        rgbBtnLabel: 'Effect & Kleur',
       },
       pl: {
         tempLabel: 'Temperatura', humiLabel: 'Wilgotność',
@@ -672,6 +853,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Wewnątrz: --°C · Zewnątrz: --°C',
         scoring: 'Obliczam...',
         fanRunning: 'Działa',
+        confirmOn: 'Aktualnie WYŁ — potwierdź, aby włączyć',
+        confirmOff: 'Aktualnie WŁ — potwierdź, aby wyłączyć',
+        confirmActionOn: 'WŁĄCZ',
+        confirmActionOff: 'WYŁĄCZ',
+        confirmCancel: 'Anuluj',
+        confirmDevFallback: 'gniazdo',
+        trendUp: 'Rosnący',
+        trendDown: 'Malejący',
+        aspTitle: '⚙️ Ustawienia auto-wyłączenia',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Urządzenia do wyłączenia',
+        colorSensorHdr: '🌡 Czujniki & Nagłówek',
+        colorDevHdr: '💡 Urządzenia',
+        colorTemp: '🌡 Kolor temperatury',
+        colorHumi: '💧 Kolor wilgotności',
+        colorScore: '⭐ Kolor wyniku',
+        colorDen: '💡 Główne światło (włączone)',
+        colorRgb: '🌈 Światło RGB (włączone)',
+        colorQuat: '🌀 Wentylator (włączony)',
+        delDevTitle: 'Usuń urządzenie',
+        rgbBtnLabel: 'Efekt & Kolor',
       },
       sv: {
         tempLabel: 'Temperatur', humiLabel: 'Luftfuktighet',
@@ -756,6 +958,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Inne: --°C · Ute: --°C',
         scoring: 'Beräknar...',
         fanRunning: 'Igång',
+        confirmOn: 'För närvarande AV — bekräfta för att slå på',
+        confirmOff: 'För närvarande PÅ — bekräfta för att stänga av',
+        confirmActionOn: 'SLÅ PÅ',
+        confirmActionOff: 'STÄNG AV',
+        confirmCancel: 'Avbryt',
+        confirmDevFallback: 'uttag',
+        trendUp: 'Stigande',
+        trendDown: 'Fallande',
+        aspTitle: '⚙️ Inställningar för auto-av',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Enheter att stänga av',
+        colorSensorHdr: '🌡 Sensorer & Header',
+        colorDevHdr: '💡 Enheter',
+        colorTemp: '🌡 Temperaturfärg',
+        colorHumi: '💧 Fuktighetsfärg',
+        colorScore: '⭐ Poängfärg',
+        colorDen: '💡 Huvudlampa (på)',
+        colorRgb: '🌈 RGB-lampa (på)',
+        colorQuat: '🌀 Fläkt (på)',
+        delDevTitle: 'Ta bort enhet',
+        rgbBtnLabel: 'Effekt & Färg',
       },
       hu: {
         tempLabel: 'Hőmérséklet', humiLabel: 'Páratartalom',
@@ -840,6 +1063,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Belül: --°C · Kinn: --°C',
         scoring: 'Számítás...',
         fanRunning: 'Fut',
+        confirmOn: 'Jelenleg KI — megerősítés a bekapcsoláshoz',
+        confirmOff: 'Jelenleg BE — megerősítés a kikapcsoláshoz',
+        confirmActionOn: 'BEKAPCSOL',
+        confirmActionOff: 'KIKAPCSOL',
+        confirmCancel: 'Mégse',
+        confirmDevFallback: 'aljzat',
+        trendUp: 'Emelkedő',
+        trendDown: 'Csökkenő',
+        aspTitle: '⚙️ Auto-kikapcsolás beállítások',
+        aspDelayUnit: 'perc',
+        aspDevTitle: '🔌 Kikapcsolandó eszközök',
+        colorSensorHdr: '🌡 Érzékelők & Fejléc',
+        colorDevHdr: '💡 Eszközök',
+        colorTemp: '🌡 Hőmérséklet szín',
+        colorHumi: '💧 Páratartalom szín',
+        colorScore: '⭐ Pontszám szín',
+        colorDen: '💡 Fővilágítás (be)',
+        colorRgb: '🌈 RGB lámpa (be)',
+        colorQuat: '🌀 Ventilátor (be)',
+        delDevTitle: 'Eszköz eltávolítása',
+        rgbBtnLabel: 'Effekt & Szín',
       },
       cs: {
         tempLabel: 'Teplota', humiLabel: 'Vlhkost',
@@ -924,6 +1168,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Uvnitř: --°C · Venku: --°C',
         scoring: 'Počítám...',
         fanRunning: 'Běží',
+        confirmOn: 'Aktuálně VYPNUTO — potvrďte pro zapnutí',
+        confirmOff: 'Aktuálně ZAPNUTO — potvrďte pro vypnutí',
+        confirmActionOn: 'ZAPNOUT',
+        confirmActionOff: 'VYPNOUT',
+        confirmCancel: 'Zrušit',
+        confirmDevFallback: 'zásuvka',
+        trendUp: 'Stoupající',
+        trendDown: 'Klesající',
+        aspTitle: '⚙️ Nastavení auto-vypnutí',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Zařízení k vypnutí',
+        colorSensorHdr: '🌡 Senzory & Záhlaví',
+        colorDevHdr: '💡 Zařízení',
+        colorTemp: '🌡 Barva teploty',
+        colorHumi: '💧 Barva vlhkosti',
+        colorScore: '⭐ Barva skóre',
+        colorDen: '💡 Hlavní světlo (zapnuto)',
+        colorRgb: '🌈 RGB světlo (zapnuto)',
+        colorQuat: '🌀 Ventilátor (zapnutý)',
+        delDevTitle: 'Odebrat zařízení',
+        rgbBtnLabel: 'Efekt & Barva',
       },
       it: {
         tempLabel: 'Temperatura', humiLabel: 'Umidità',
@@ -1008,6 +1273,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Interno: --°C · Esterno: --°C',
         scoring: 'Calcolo...',
         fanRunning: 'In funzione',
+        confirmOn: 'Attualmente SPENTO — conferma per accendere',
+        confirmOff: 'Attualmente ACCESO — conferma per spegnere',
+        confirmActionOn: 'ACCENDI',
+        confirmActionOff: 'SPEGNI',
+        confirmCancel: 'Annulla',
+        confirmDevFallback: 'presa',
+        trendUp: 'In aumento',
+        trendDown: 'In calo',
+        aspTitle: '⚙️ Impostazioni auto-spegnimento',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Dispositivi da spegnere',
+        colorSensorHdr: '🌡 Sensori & Intestazione',
+        colorDevHdr: '💡 Dispositivi',
+        colorTemp: '🌡 Colore temperatura',
+        colorHumi: '💧 Colore umidità',
+        colorScore: '⭐ Colore punteggio',
+        colorDen: '💡 Luce principale (accesa)',
+        colorRgb: '🌈 Luce RGB (accesa)',
+        colorQuat: '🌀 Ventilatore (acceso)',
+        delDevTitle: 'Rimuovi dispositivo',
+        rgbBtnLabel: 'Effetto & Colore',
       },
       pt: {
         tempLabel: 'Temperatura', humiLabel: 'Humidade',
@@ -1092,6 +1378,27 @@ class HASmartRoomCard extends HTMLElement {
         spTempLine: 'Interior: --°C · Exterior: --°C',
         scoring: 'A calcular...',
         fanRunning: 'A funcionar',
+        confirmOn: 'Atualmente DESLIGADO — confirmar para ligar',
+        confirmOff: 'Atualmente LIGADO — confirmar para desligar',
+        confirmActionOn: 'LIGAR',
+        confirmActionOff: 'DESLIGAR',
+        confirmCancel: 'Cancelar',
+        confirmDevFallback: 'tomada',
+        trendUp: 'A subir',
+        trendDown: 'A descer',
+        aspTitle: '⚙️ Definições de desligamento automático',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Dispositivos a desligar',
+        colorSensorHdr: '🌡 Sensores & Cabeçalho',
+        colorDevHdr: '💡 Dispositivos',
+        colorTemp: '🌡 Cor temperatura',
+        colorHumi: '💧 Cor humidade',
+        colorScore: '⭐ Cor pontuação',
+        colorDen: '💡 Luz principal (ligada)',
+        colorRgb: '🌈 Luz RGB (ligada)',
+        colorQuat: '🌀 Ventilador (ligado)',
+        delDevTitle: 'Remover dispositivo',
+        rgbBtnLabel: 'Efeito & Cor',
       },
     };
     return T[lang] || T.vi;
@@ -1115,14 +1422,12 @@ class HASmartRoomCard extends HTMLElement {
   // HA generates entity_id from the entity *name* (not unique_id).
   // Python sets name = "{room_title} Auto Off" etc., then HA slugifies it.
   // We slugify the room_title the same way to reconstruct the correct entity_id.
-  _intSlug() {
-    const title = (this._config && (this._config.room_title || this._config.title)) || 'smart room';
-    return title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  }
-  _intAutoSwitchId()   { return `switch.${this._intSlug()}_auto_off`; }
-  _intDelayNumberId()  { return `number.${this._intSlug()}_auto_off_delay`; }
-  _intStatusId()       { return `sensor.${this._intSlug()}_status`; }
-  _intCountdownId()    { return `sensor.${this._intSlug()}_countdown`; }
+  // Entity IDs khớp với Python: dùng room_id (cardId) — phải trùng với _attr_name trong Python
+  // Python: _attr_name = f"{coord.room_id}_auto_off" → HA tạo switch.{room_id}_auto_off
+  _intAutoSwitchId()   { return `switch.${this._roomId}_auto_off`; }
+  _intDelayNumberId()  { return `number.${this._roomId}_auto_off_delay`; }
+  _intStatusId()       { return `sensor.${this._roomId}_status`; }
+  _intCountdownId()    { return `sensor.${this._roomId}_countdown`; }
 
   // Đọc auto mode từ integration entity
   _readAutoModeFromIntegration() {
@@ -1133,11 +1438,35 @@ class HASmartRoomCard extends HTMLElement {
 
   // Ghi auto mode lên integration entity
   async _writeAutoModeToIntegration(on) {
-    if (!this._hass) return;
-    await this._hass.callService(
-      'switch', on ? 'turn_on' : 'turn_off',
-      { entity_id: this._intAutoSwitchId() }
-    );
+    if (!this._hass) {
+      console.warn('[HASmartRoom] _writeAutoModeToIntegration: _hass is null!');
+      return;
+    }
+    const switchId = this._intAutoSwitchId();
+    // Kiểm tra entity có tồn tại không
+    const entityExists = !!this._hass.states[switchId];
+    console.log('[HASmartRoom] writeAutoMode:', on ? 'ON' : 'OFF',
+      '| entity:', switchId,
+      '| exists:', entityExists,
+      '| room_id:', this._roomId);
+    if (!entityExists) {
+      console.warn('[HASmartRoom] Switch entity chưa tồn tại trên HA — cần register_room trước');
+    }
+    // Đặt flag + target để hass setter không reset _autoMode trước khi HA xác nhận
+    this._integrationPending = true;
+    this._integrationPendingTarget = on;
+    try {
+      await this._hass.callService(
+        'switch', on ? 'turn_on' : 'turn_off',
+        { entity_id: switchId }
+      );
+      console.log('[HASmartRoom] callService switch done, waiting for HA confirm...');
+    } catch(e) {
+      // Nếu lỗi → xoá flag để không bị treo mãi
+      this._integrationPending = false;
+      this._integrationPendingTarget = undefined;
+      console.error('[HASmartRoom] callService switch FAILED:', e);
+    }
   }
 
   // Đọc countdown còn lại từ integration sensor (seconds)
@@ -1176,18 +1505,26 @@ class HASmartRoomCard extends HTMLElement {
       if (allowed.includes(d.id) && E[d.id]) deviceEntities.push(E[d.id]);
     }
 
-    try {
-      await this._hass.callService('ha_smart_room', 'register_room', {
-        room_id:         this._roomId,
-        room_title:      cfg.room_title || cfg.title || 'Smart Room',
-        delay_min:       cfg.auto_delay_min || 5,
-        motion_entity:   E.motion || '',
-        device_entities: deviceEntities,
-      });
-      console.log('[HASmartRoom] Registered room with integration:', this._roomId);
-    } catch(e) {
-      console.warn('[HASmartRoom] Integration not found — falling back to local mode', e);
+    const payload = {
+      room_id:         this._roomId,
+      room_title:      cfg.room_title || cfg.title || 'Smart Room',
+      delay_min:       parseInt(cfg.auto_delay_min || 5, 10),  // phải là integer
+      motion_entity:   E.motion || '',
+      device_entities: deviceEntities,
+    };
+    // Retry tối đa 3 lần — HA có thể chưa sẵn sàng ngay sau khi load
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this._hass.callService('ha_smart_room', 'register_room', payload);
+        console.log('[HASmartRoom] Registered room with integration:', this._roomId, '(attempt', attempt + ')');
+        this._integrationRegistered = true;
+        return;
+      } catch(e) {
+        console.warn('[HASmartRoom] register_room attempt', attempt, 'failed:', e.message || e);
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+      }
     }
+    console.error('[HASmartRoom] register_room failed after 3 attempts — check integration is loaded');
   }
 
   // ─── Helper mode: đọc/ghi state qua HA input_boolean + input_number ────────
@@ -1310,15 +1647,20 @@ class HASmartRoomCard extends HTMLElement {
     // Integration mode: engine chỉ cập nhật UI từ integration sensors
     // Toàn bộ logic tắt thiết bị do integration xử lý server-side
     if (this._useIntegration) {
+      const status    = this._readStatusFromIntegration();
       const remaining = this._readCountdownFromIntegration();
-      if (remaining !== null) {
+
+      if (status === 'occupied') {
+        // Có người — hiện trạng thái bình thường, xóa countdown
+        this._updateAutoCountdown(0);
+      } else if (status === 'countdown' && remaining !== null) {
+        // Đang đếm ngược — cập nhật UI
         this._updateAutoCountdown(remaining * 1000);
-      }
-      const status = this._readStatusFromIntegration();
-      if (status === 'idle' || status === 'occupied') {
-        // Phòng có người hoặc idle — xóa countdown UI
+      } else if (status === 'triggered') {
+        // Vừa tắt xong
         this._updateAutoCountdown(0);
       }
+      // status === 'idle': không làm gì — tránh reset countdown đang chạy
       return;
     }
 
@@ -1569,9 +1911,10 @@ class HASmartRoomCard extends HTMLElement {
   // Popup xác nhận — CHỈ dùng cho ổ cắm (type=ocam), không dùng cho đèn/quạt
   _toggleWithConfirm(entityId, label) {
     if (!entityId || !this._hass) return;
+    const t = this._ct;
     const domain = entityId.split('.')[0];
     const isOn = this._hass.states[entityId]?.state === 'on';
-    const action = isOn ? 'TẮT' : 'BẬT';
+    const action = isOn ? t.confirmActionOff : t.confirmActionOn;
     const actionSvc = isOn ? 'turn_off' : 'turn_on';
     const actionColor = isOn ? 'rgba(255,90,90,1)' : 'rgba(60,220,120,1)';
     const overlay = document.createElement('div');
@@ -1580,10 +1923,10 @@ class HASmartRoomCard extends HTMLElement {
     sheet.style.cssText = 'background:linear-gradient(160deg,#1a2a40 0%,#0d1a2e 100%);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:24px 28px 20px;min-width:230px;max-width:290px;box-shadow:0 24px 60px rgba(0,0,0,0.65);text-align:center;animation:hsrcSlUp .18s ease;';
     sheet.innerHTML = '<style>@keyframes hsrcSlUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}</style>'
       + '<div style="font-size:34px;margin-bottom:6px">' + (isOn ? '🔴' : '🟢') + '</div>'
-      + '<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">' + action + ' ' + (label || 'ổ cắm') + '?</div>'
-      + '<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:20px">' + (isOn ? 'Đang BẬT — xác nhận để tắt' : 'Đang TẮT — xác nhận để bật') + '</div>'
+      + '<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:4px">' + action + ' ' + (label || t.confirmDevFallback) + '?</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:20px">' + (isOn ? t.confirmOff : t.confirmOn) + '</div>'
       + '<div style="display:flex;gap:10px">'
-      + '<button id="hsrc-cfm-cancel" style="flex:1;padding:11px 0;border-radius:12px;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);font-size:13px;font-weight:700">Huỷ</button>'
+      + '<button id="hsrc-cfm-cancel" style="flex:1;padding:11px 0;border-radius:12px;border:none;cursor:pointer;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);font-size:13px;font-weight:700">' + t.confirmCancel + '</button>'
       + '<button id="hsrc-cfm-ok" style="flex:1;padding:11px 0;border-radius:12px;border:1.5px solid ' + actionColor + ';cursor:pointer;background:' + actionColor + '22;color:' + actionColor + ';font-size:13px;font-weight:700">' + action + '</button>'
       + '</div>';
     overlay.appendChild(sheet);
@@ -1661,7 +2004,7 @@ class HASmartRoomCard extends HTMLElement {
   }
 
   // ─── Render (first time) ───────────────────────────────────────────────────
-  _render() {
+  async _render() {
     this.shadowRoot.innerHTML = `
       <style>${STYLES}</style>
       <div class="root" id="root" style="${this._getRootBg()}">
@@ -1677,7 +2020,7 @@ class HASmartRoomCard extends HTMLElement {
     this._bindExtraCardEvents();
     // Đăng ký phòng với integration sau render đầu
     if (this._useIntegration) {
-      this._registerWithIntegration();
+      await this._registerWithIntegration();
     }
     this._mountOverlaysToHost();
     this._syncRootColorVars();
@@ -2429,7 +2772,7 @@ class HASmartRoomCard extends HTMLElement {
         if (!this._dragging || this._dragId !== id) this._setSliderById(id, pct, 'y');
         if (sb) sb.textContent = on ? 'ON' : 'OFF';
       } else if (d.type === 'rgb') {
-        const eff = (state && state.attributes.effect) || 'Màu sắc';
+        const eff = (state && state.attributes.effect) || this._ct.rbEffectColor;
         if (sb) sb.textContent = on ? eff : 'OFF';
         const bot = this.shadowRoot.getElementById('rgb-bot-' + id);
         if (bot) { bot.style.opacity = on ? '1' : '0.3'; bot.style.pointerEvents = on ? 'auto' : 'none'; }
@@ -2541,7 +2884,7 @@ class HASmartRoomCard extends HTMLElement {
       if (ba) { ba.className = 'on-badge ' + (on ? 'ba-r' : 'ba-off'); ba.textContent = on ? 'ON' : 'OFF'; }
       if (sb) {
         sb.className = 'c-sub ' + (on ? 'sub-r' : 'sub-off');
-        const eff = this._attr('rgb','effect') || 'Màu sắc';
+        const eff = this._attr('rgb','effect') || this._ct.rbEffectColor;
         sb.textContent = on ? eff : 'OFF';
       }
       const bot = $('rgb-bot');
@@ -2575,7 +2918,7 @@ class HASmartRoomCard extends HTMLElement {
 
     } else if (id === 'quat') {
       if (ba) { ba.className = 'on-badge ' + (on ? 'ba-c' : 'ba-off'); ba.textContent = on ? 'ON' : 'OFF'; }
-      if (sb) { sb.className = 'c-sub ' + (on ? 'sub-c' : 'sub-off'); sb.textContent = on ? 'Đang chạy' : 'OFF'; }
+      if (sb) { sb.className = 'c-sub ' + (on ? 'sub-c' : 'sub-off'); sb.textContent = on ? this._ct.fanRunning : 'OFF'; }
       const fanSvg = $('fan-svg');
       if (fanSvg) {
         fanSvg.style.animationPlayState = on ? 'running' : 'paused';
@@ -2782,15 +3125,21 @@ class HASmartRoomCard extends HTMLElement {
             e.stopPropagation();
             // Lưu id để RGB modal biết entity nào đang được điều khiển
             this._activeRgbId = id;
-            const overlay = this.shadowRoot.getElementById('rgb-modal-overlay');
-            const sheet   = this.shadowRoot.getElementById('rgb-modal-sheet');
+            // Tìm overlay — có thể đã mount ra body
+            const overlay = this['_overlay_rgb-modal-overlay']
+              || this.shadowRoot.getElementById('rgb-modal-overlay')
+              || document.getElementById('rgb-modal-overlay');
+            const sheet = overlay ? overlay.querySelector('#rgb-modal-sheet, .rgb-modal-sheet') : null;
             if (overlay) {
               overlay.style.display = 'flex';
               requestAnimationFrame(() => {
                 overlay.classList.add('visible');
-                sheet.classList.add('visible');
+                if (sheet) sheet.classList.add('visible');
               });
             }
+            // Render effect_list từ attributes của entity vừa chọn
+            const eid = this.ENTITIES[id];
+            this._refreshEffectList(eid);
           });
         }
       }
@@ -2820,7 +3169,7 @@ class HASmartRoomCard extends HTMLElement {
       'tp-rgb':   () => this._toggle(E.rgb),
       'tp-hien':  () => this._toggle(E.hien),
       'tp-quat':  () => this._toggle(E.quat),
-      'tp-ocam':  () => this._toggleWithConfirm(E.ocam, 'Ổ cắm'),
+      'tp-ocam':  () => this._toggleWithConfirm(E.ocam, this._ct.chipOcam),
       // motion & tv: no toggle
     };
     Object.entries(toggleMap).forEach(([id, fn]) => {
@@ -2888,13 +3237,11 @@ class HASmartRoomCard extends HTMLElement {
         overlay.classList.add('visible');
         sheet.classList.add('visible');
       });
-      // Đánh dấu effect hiện tại
-      this.shadowRoot.querySelectorAll('.rgb-ef-item').forEach(el => {
-        el.classList.toggle('act', el.dataset.ef === this._rgbEffect);
-      });
-      // Scroll tới effect đang chọn
-      const active = this.shadowRoot.querySelector('.rgb-ef-item.act');
-      if (active) setTimeout(() => active.scrollIntoView({block:'center',behavior:'smooth'}), 150);
+      // Lấy entity đang active (rgb-btn chính → E.rgb)
+      const E = this.ENTITIES;
+      const activeEid = (this._activeRgbId && E[this._activeRgbId]) ? E[this._activeRgbId] : E.rgb;
+      // Render effect_list từ attributes của entity, bao gồm mark & scroll
+      this._refreshEffectList(activeEid);
     };
     const closeModal = () => {
       if (!overlay) return;
@@ -2902,7 +3249,11 @@ class HASmartRoomCard extends HTMLElement {
       sheet.classList.remove('visible');
       setTimeout(() => { overlay.style.display = 'none'; }, 300);
     };
-    if (rgbBtn) rgbBtn.addEventListener('click', e => { e.stopPropagation(); openModal(); });
+    if (rgbBtn) rgbBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      this._activeRgbId = null; // reset về entity rgb mặc định
+      openModal();
+    });
     const closeBtn = $('rgb-modal-close');
     if (closeBtn) closeBtn.addEventListener('click', e => { e.stopPropagation(); closeModal(); });
     if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
@@ -2911,10 +3262,7 @@ class HASmartRoomCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.bsw').forEach(sw => {
       sw.addEventListener('click', () => this._applyColor(sw.dataset.c));
     });
-    // Effect list items
-    this.shadowRoot.querySelectorAll('.rgb-ef-item').forEach(btn => {
-      btn.addEventListener('click', () => this._pickEffect(btn));
-    });
+    // Effect list items — binding is handled dynamically by _refreshEffectList()
     const ccp = $('ccp');
     if (ccp) ccp.addEventListener('input', e => { e.stopPropagation(); this._applyColor(ccp.value); });
 
@@ -3031,19 +3379,26 @@ class HASmartRoomCard extends HTMLElement {
       this._syncModeButtonUI();
       this._updateHeader();
     });
-    if (btnAutoMode) btnAutoMode.addEventListener('click', () => {
+    if (btnAutoMode) btnAutoMode.addEventListener('click', async () => {
       this._autoMode = true;
       if (this._useIntegration) {
-        // Ghi lên integration switch entity — server sẽ bắt đầu countdown nếu cần
-        this._writeAutoModeToIntegration(true);
-        // Cập nhật delay nếu config có giá trị mới
+        // Set flag TRƯỚC mọi async call để hass setter không reset _autoMode
+        this._integrationPending = true;
+        this._integrationPendingTarget = true;
+        console.log('[HASmartRoom] AUTO btn: pending=true, switch=', this._intAutoSwitchId());
+        // Đảm bảo phòng đã đăng ký với integration trước khi ghi switch
+        await this._registerWithIntegration();
+        console.log('[HASmartRoom] AUTO btn: registered, writing switch ON');
+        // Cập nhật delay trước, sau đó bật switch
         const delayMin = (this._config && this._config.auto_delay_min) || 5;
         if (this._hass) {
           this._hass.callService('number', 'set_value', {
-            entity_id: this._intDelaySwitchId(),
+            entity_id: this._intDelayNumberId(),
             value: delayMin,
           });
         }
+        await this._writeAutoModeToIntegration(true);
+        console.log('[HASmartRoom] AUTO btn: switch write done, pending=', this._integrationPending);
       } else if (this._useHelpers) {
         this._writeAutoModeToHelper(true);
       } else {
@@ -3063,6 +3418,125 @@ class HASmartRoomCard extends HTMLElement {
       this._updateHeader();
     });
     this._syncModeButtonUI();
+
+    // ── Settings button ───────────────────────────────────────────────────────
+    const btnSettings = $('btn-settings');
+    if (btnSettings) btnSettings.addEventListener('click', () => {
+      const panel = $('auto-settings-panel');
+      if (!panel) return;
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+      btnSettings.classList.toggle('asp-open', !isOpen);
+      if (!isOpen) this._renderSettingsPanel();
+    });
+
+    // ── Settings panel: minus / plus ──────────────────────────────────────────
+    const aspMinus = $('asp-minus');
+    const aspPlus  = $('asp-plus');
+    if (aspMinus) aspMinus.addEventListener('click', () => {
+      const cur = parseInt((this._config && this._config.auto_delay_min) || 5, 10);
+      const val = Math.max(1, cur - 1);
+      this._aspSetDelay(val);
+    });
+    if (aspPlus) aspPlus.addEventListener('click', () => {
+      const cur = parseInt((this._config && this._config.auto_delay_min) || 5, 10);
+      const val = Math.min(120, cur + 1);
+      this._aspSetDelay(val);
+    });
+  }
+
+  // ─── Render settings panel chip list ──────────────────────────────────────
+  _renderSettingsPanel() {
+    const panel = this.shadowRoot && this.shadowRoot.getElementById('auto-settings-panel');
+    if (!panel) return;
+    const cfg = this._config || {};
+    const E   = this.ENTITIES;
+
+    // Cập nhật số phút
+    const valEl = this.shadowRoot.getElementById('asp-delay-val');
+    if (valEl) valEl.textContent = cfg.auto_delay_min || 5;
+
+    // Build device list trực tiếp từ ENTITIES đã cấu hình
+    // (không dùng _getDeviceList vì method đó chỉ có trong editor class)
+    const EXCLUDE_TYPES = ['tv', 'sensor'];
+    const ALL_DEVS = [
+      { id: 'den',    label: '💡 Đèn Chính', type: 'den',    entityKey: 'den_entity'    },
+      { id: 'decor',  label: '✨ Đèn Decor',  type: 'den',    entityKey: 'decor_entity'  },
+      { id: 'hien',   label: '🏮 Đèn Hiên',  type: 'den',    entityKey: 'hien_entity'   },
+      { id: 'rgb',    label: '🌈 Đèn RGB',   type: 'rgb',    entityKey: 'rgb_entity'    },
+      { id: 'quat',   label: '🌀 Quạt Trần', type: 'quat',   entityKey: 'quat_entity'   },
+      { id: 'ocam',   label: '🔌 Ổ Cắm',    type: 'ocam',   entityKey: 'ocam_entity'   },
+      { id: 'ac',     label: '❄️ Điều Hòa',  type: 'climate',entityKey: 'ac_entity'     },
+    ];
+
+    // Lấy label tuỳ chỉnh từ config nếu có
+    const labels  = cfg.devices_labels || {};
+    // Lọc: chỉ hiện thiết bị đã được cấu hình entity (có trong ENTITIES hoặc config)
+    // và không thuộc loại bị loại trừ
+    const devList = ALL_DEVS.filter(d => {
+      if (EXCLUDE_TYPES.includes(d.type)) return false;
+      return !!(E[d.id] || cfg[d.entityKey]);
+    }).map(d => ({ ...d, label: labels[d.id] || d.label }));
+
+    // Thêm extra devices đã cấu hình (loại trừ tv/sensor)
+    const extras = cfg.devices_extra || [];
+    extras.forEach(d => {
+      if (EXCLUDE_TYPES.includes(d.type)) return;
+      if (E[d.id] || cfg[d.entityKey || (d.id + '_entity')]) {
+        devList.push({ id: d.id, label: d.label || d.id, type: d.type });
+      }
+    });
+
+    // Nếu không có thiết bị nào được cấu hình, hiện toàn bộ danh sách mặc định
+    const finalList = devList.length > 0 ? devList : ALL_DEVS;
+    const defaultIds = finalList.map(d => d.id);
+    const autoList   = cfg.auto_off_entities || defaultIds;
+
+    const listEl = this.shadowRoot.getElementById('asp-dev-list');
+    if (!listEl) return;
+    listEl.innerHTML = finalList.map(d => {
+      const on = autoList.includes(d.id) ? 'on' : '';
+      return `<div class="asp-dev-chip ${on}" data-id="${d.id}">${d.label}</div>`;
+    }).join('');
+
+    // Bind chip click
+    listEl.querySelectorAll('.asp-dev-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const id = chip.dataset.id;
+        const cur = [...((this._config && this._config.auto_off_entities) || defaultIds)];
+        const updated = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+        this._config = { ...this._config, auto_off_entities: updated };
+        chip.classList.toggle('on', updated.includes(id));
+        this._aspSaveConfig();
+      });
+    });
+  }
+
+  _aspSetDelay(val) {
+    this._config = { ...this._config, auto_delay_min: val };
+    const valEl = this.shadowRoot && this.shadowRoot.getElementById('asp-delay-val');
+    if (valEl) valEl.textContent = val;
+    this._aspSaveConfig();
+  }
+
+  _aspSaveConfig() {
+    // Nếu integration mode: cập nhật số phút lên HA entity + re-register
+    if (this._useIntegration && this._hass) {
+      const delayMin = parseInt((this._config && this._config.auto_delay_min) || 5, 10);
+      // Cập nhật number entity trên HA
+      this._hass.callService('number', 'set_value', {
+        entity_id: this._intDelayNumberId(),
+        value: delayMin,
+      }).catch(() => {});
+      // Re-register để sync device_entities mới
+      this._registerWithIntegration();
+    }
+    // Lưu cấu hình card (fire config-changed cho HA lưu vào dashboard)
+    if (this._rendered) {
+      this.dispatchEvent(new CustomEvent('config-changed', {
+        detail: { config: this._config }, bubbles: true, composed: true,
+      }));
+    }
   }
 
   _bindSlider(id, onCommit) {
@@ -3123,7 +3597,16 @@ class HASmartRoomCard extends HTMLElement {
   }
 
   _pickEffect(el) {
-    this.shadowRoot.querySelectorAll('.rgb-ef-item').forEach(b => b.classList.remove('act'));
+    // Tìm ef-list trong overlay (có thể đã mount ra body)
+    const overlay = this['_overlay_rgb-modal-overlay']
+      || this.shadowRoot.getElementById('rgb-modal-overlay')
+      || document.getElementById('rgb-modal-overlay');
+    const efList = overlay ? overlay.querySelector('#rgb-ef-list') : null;
+    if (efList) {
+      efList.querySelectorAll('.rgb-ef-item').forEach(b => b.classList.remove('act'));
+    } else {
+      this.shadowRoot.querySelectorAll('.rgb-ef-item').forEach(b => b.classList.remove('act'));
+    }
     el.classList.add('act');
     this._rgbEffect = el.dataset.ef;
     const sub = this.shadowRoot.getElementById('sb-rgb');
@@ -3555,10 +4038,10 @@ class HASmartRoomCard extends HTMLElement {
         const delta = recent[recent.length-1] - recent[0];
         if (delta > 0.5) {
           trendEl.textContent = '↑'; trendEl.style.color='rgba(255,100,80,1)';
-          trendEl.title = `Đang tăng +${delta.toFixed(1)}°C`;
+          trendEl.title = `${this._ct.trendUp} +${delta.toFixed(1)}°C`;
         } else if (delta < -0.5) {
           trendEl.textContent = '↓'; trendEl.style.color='rgba(80,220,255,1)';
-          trendEl.title = `Đang giảm ${delta.toFixed(1)}°C`;
+          trendEl.title = `${this._ct.trendDown} ${delta.toFixed(1)}°C`;
         } else {
           trendEl.textContent = '→'; trendEl.style.color='rgba(180,180,180,0.6)';
           trendEl.title = 'Ổn định';
@@ -3710,9 +4193,30 @@ class HASmartRoomCard extends HTMLElement {
             <div class="sp-mode-btns">
               <button class="btn-manual" id="btn-manual">Manual</button>
               <button class="btn-auto-mode" id="btn-auto-mode">Auto</button>
+              <button class="btn-settings" id="btn-settings" title="Cài đặt tự động">⚙️</button>
             </div>
           </div>
           </div><!-- /sec-auto-mode -->
+
+          <!-- ── Settings Panel (inline, ẩn mặc định) ── -->
+          <div class="auto-settings-panel" id="auto-settings-panel" style="display:none">
+            <div class="asp-title">${this._ct.aspTitle}</div>
+
+            <!-- Số phút -->
+            <div class="asp-row">
+              <span class="asp-lbl">⏱️ Tắt sau</span>
+              <div class="asp-delay-wrap">
+                <button class="asp-step" id="asp-minus">−</button>
+                <span class="asp-delay-val" id="asp-delay-val">5</span>
+                <span class="asp-delay-unit">${this._ct.aspDelayUnit}</span>
+                <button class="asp-step" id="asp-plus">＋</button>
+              </div>
+            </div>
+
+            <!-- Danh sách thiết bị sẽ tắt -->
+            <div class="asp-lbl" style="margin-top:8px;margin-bottom:4px;">${this._ct.aspDevTitle}</div>
+            <div class="asp-dev-list" id="asp-dev-list"></div>
+          </div>
         </div>
       </div>`;
   }
@@ -3767,29 +4271,6 @@ class HASmartRoomCard extends HTMLElement {
   }
 
   _tplRgbModal() {
-    const effects = [
-      'None','Solid','Blink','Breathe','Wipe','Wipe Random','Random Colors','Sweep',
-      'Dynamic','Colorloop','Rainbow','Scan','Scan Dual','Fade','Theater','Theater Rainbow',
-      'Running','Saw','Twinkle','Dissolve','Dissolve Rnd','Sparkle','Sparkle Dark',
-      'Sparkle+','Strobe','Strobe Rainbow','Strobe Mega','Blink Rainbow','Android','Chase',
-      'Chase Random','Chase Rainbow','Chase Flash','Chase Flash Rnd','Rainbow Runner',
-      'Colorful','Traffic Light','Sweep Random','Running 2','Aurora','Stream',
-      'Scanner','Lighthouse','Fireworks','Rain','Merry Christmas','Fire Flicker',
-      'Gradient','Loading','Police','Police All','Two Dots','Two Areas','Circus',
-      'Halloween','Tri Chase','Tri Wipe','Tri Fade','Lightning','ICU','Multi Comet',
-      'Scanner Dual','Stream 2','Oscillate','Pride 2015','Juggle','Palette',
-      'Fire 2012','Colorwaves','BPM','Fill Noise','Noise 1','Noise 2','Noise 3',
-      'Noise 4','Colortwinkles','Lake','Meteor','Meteor Smooth','Railway','Ripple',
-      'Twinklefox','Twinklecat','Halloween Eyes','Solid Pattern','Solid Pattern Tri',
-      'Spots','Spots Fade','Glitter','Candle','Fireworks Starburst','Fireworks 1D',
-      'Bouncing Balls','Sinelon','Sinelon Dual','Sinelon Rainbow','Popcorn','Drip',
-      'Plasma','Percent','Ripple Rainbow','Heartbeat','Pacifica','Candle Multi',
-      'Solid Glitter','Sunrise','Phased','Twinkleup','Noise Pal','Sine','Phased Noise',
-      'Flow','Chunchun','Dancing Shadows','Washing Machine'
-    ];
-    const rows = effects.map(ef =>
-      `<div class="rgb-ef-item" data-ef="${ef}">${ef}</div>`
-    ).join('');
     return `
       <div class="rgb-modal-overlay" id="rgb-modal-overlay" style="display:none">
         <div class="rgb-modal-sheet" id="rgb-modal-sheet">
@@ -3817,13 +4298,44 @@ class HASmartRoomCard extends HTMLElement {
               <input type="color" id="ccp" value="#ff4444">
               <span class="cc-lbl" id="hex-lbl">#ff4444</span>
             </div>
-            <div class="rgb-modal-sec">EFFECT</div>
-            <div class="rgb-ef-list" id="rgb-ef-list">
-              ${rows}
-            </div>
+            <div class="rgb-modal-sec" id="rgb-ef-sec-lbl">EFFECT</div>
+            <div class="rgb-ef-list" id="rgb-ef-list"></div>
           </div>
         </div>
       </div>`;
+  }
+
+  // Đọc effect_list từ attributes của entity, render vào #rgb-ef-list và bind events
+  // Hỗ trợ cả overlay được mount ra document.body (dùng _getEl thay shadowRoot.getElementById)
+  _refreshEffectList(entityId) {
+    // Tìm container — ưu tiên trong overlay đã mount ra body, rồi mới shadowRoot
+    const overlay = this['_overlay_rgb-modal-overlay']
+      || this.shadowRoot.getElementById('rgb-modal-overlay')
+      || document.getElementById('rgb-modal-overlay');
+    const efList = overlay
+      ? overlay.querySelector('#rgb-ef-list')
+      : (this.shadowRoot.getElementById('rgb-ef-list') || document.getElementById('rgb-ef-list'));
+    if (!efList) return;
+
+    const state = entityId && this._hass ? this._hass.states[entityId] : null;
+    const effects = (state && Array.isArray(state.attributes.effect_list) && state.attributes.effect_list.length)
+      ? state.attributes.effect_list
+      : ['None'];
+
+    efList.innerHTML = effects.map(ef =>
+      `<div class="rgb-ef-item" data-ef="${ef.replace(/"/g,'&quot;')}">${ef}</div>`
+    ).join('');
+
+    // Đánh dấu effect hiện tại (từ HA state, ưu tiên hơn _rgbEffect local)
+    const currentEffect = (state && state.attributes.effect) || this._rgbEffect;
+    efList.querySelectorAll('.rgb-ef-item').forEach(el => {
+      el.classList.toggle('act', el.dataset.ef === currentEffect);
+      el.addEventListener('click', () => this._pickEffect(el));
+    });
+
+    // Scroll tới effect đang chọn
+    const active = efList.querySelector('.rgb-ef-item.act');
+    if (active) setTimeout(() => active.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
   }
 
   _tplSmartBar() {
@@ -4206,7 +4718,7 @@ class HASmartRoomCard extends HTMLElement {
           <div class="c-name">Đèn RGB</div>
           <div class="c-sub sub-r" id="sb-rgb">--</div>
           <div class="rainbow-bar" style="margin-top:2px"></div>
-          <div class="rgb-btn" style="margin-top:5px">Effect &amp; Màu</div>
+          <div class="rgb-btn" style="margin-top:5px">${this._ct.rgbBtnLabel}</div>
         </div>
       </div>`;
   }
@@ -4238,7 +4750,7 @@ class HASmartRoomCard extends HTMLElement {
       <div class="spd-popup-overlay" id="spd-popup-overlay" style="display:none">
         <div class="spd-popup-sheet" id="spd-popup-sheet">
           <div class="spd-popup-handle"></div>
-          <div class="spd-popup-title">⚡ Chọn tốc độ quạt</div>
+          <div class="spd-popup-title">${this._ct.fanPopupTitle}</div>
           <div class="spd-popup-grid">
             <div class="spd-btn" data-s="1">1<span class="spd-lv-lbl">Nhẹ</span></div>
             <div class="spd-btn" data-s="2">2<span class="spd-lv-lbl">Thấp</span></div>
@@ -4290,6 +4802,7 @@ class HASmartRoomCard extends HTMLElement {
   }
 
   _tplTv() {
+    const t = this._ct;
     return `
       <div class="dcard on-b" id="cd-tv">
         <div class="top-h bg-b" id="tp-tv">
@@ -4311,12 +4824,12 @@ class HASmartRoomCard extends HTMLElement {
         </div>
         <div class="bot-h">
           <div class="c-name">Smart TV</div>
-          <div class="sl-lbl" style="margin-top:2px"><span>ÂM LƯỢNG</span><span id="vl-tv">--%</span></div>
+          <div class="sl-lbl" style="margin-top:2px"><span>${t.tvVolLabel}</span><span id="vl-tv">--%</span></div>
           <div class="track" id="tr-tv">
             <div class="fill-c" id="fl-tv" style="width:0%"></div>
             <div class="thumb" id="th-tv" style="left:0%"></div>
           </div>
-          <button class="tv-remote-btn" id="tv-remote-btn">📺 Điều khiển</button>
+          <button class="tv-remote-btn" id="tv-remote-btn">${t.tvControlBtn}</button>
         </div>
       </div>
       <!-- TV Remote Modal -->
@@ -4325,7 +4838,7 @@ class HASmartRoomCard extends HTMLElement {
           <div class="tv-modal-handle"></div>
           <div class="tv-modal-header">
             <div class="tv-modal-title-wrap">
-              <span class="tv-modal-title">📺 Điều Khiển TV</span>
+              <span class="tv-modal-title">${t.tvModalTitle}</span>
               <div id="tv-status-dot" class="tv-status-dot"></div>
               <span id="tv-status-label" class="tv-status-label">---</span>
             </div>
@@ -4336,19 +4849,19 @@ class HASmartRoomCard extends HTMLElement {
             <div class="tv-row">
               <button class="tv-btn tv-btn-power" id="tv-btn-power">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12c0 3.87-3.13 7-7 7A7 7 0 0 1 5 12c0-2.28 1.09-4.3 2.79-5.6L6.38 5A8.97 8.97 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
-                <span>Nguồn</span>
+                <span>${t.tvPower}</span>
               </button>
               <button class="tv-btn tv-btn-mute" id="tv-btn-mute">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 18L19 19.27 20.27 18 5.27 3 4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
-                <span>Mute</span>
+                <span>${t.tvMute}</span>
               </button>
               <button class="tv-btn tv-btn-vol" id="tv-btn-vol-down">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M18.5 12A4.5 4.5 0 0 0 16 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5zm7-.17v6.34L9.83 13H7v-2h2.83L12 8.83z"/></svg>
-                <span>Vol −</span>
+                <span>${t.tvVolDown}</span>
               </button>
               <button class="tv-btn tv-btn-vol tv-btn-vol-up" id="tv-btn-vol-up">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                <span>Vol +</span>
+                <span>${t.tvVolUp}</span>
               </button>
             </div>
 
@@ -4356,19 +4869,19 @@ class HASmartRoomCard extends HTMLElement {
             <div class="tv-row">
               <button class="tv-btn" id="tv-btn-home">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-                <span>Home</span>
+                <span>${t.tvHome}</span>
               </button>
               <button class="tv-btn" id="tv-btn-menu">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
-                <span>Menu</span>
+                <span>${t.tvMenu}</span>
               </button>
               <button class="tv-btn" id="tv-btn-back">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-                <span>Back</span>
+                <span>${t.tvBack}</span>
               </button>
               <button class="tv-btn" id="tv-btn-input">
                 <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 3H5C3.9 3 3 3.9 3 5v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h15v14zM7 8h2v2H7zm0 4h2v2H7zm0 4h2v2H7zm10-8h-6v2h6V8zm0 4h-6v2h6v-2zm0 4h-6v2h6v-2z"/></svg>
-                <span>Input</span>
+                <span>${t.tvInput}</span>
               </button>
             </div>
 
@@ -4430,7 +4943,7 @@ class HASmartRoomCard extends HTMLElement {
         </div>
         <div class="bot-h">
           <div class="c-name">Cảm Biến</div>
-          <div class="c-sub sub-pu" id="sb-motion">Không ai</div>
+          <div class="c-sub sub-pu" id="sb-motion">${this._ct.motionNo}</div>
           <!-- Người chào lại — to hơn, hiện khi detected -->
           <svg id="motion-greeter" viewBox="0 0 40 42" width="36" height="46"
                style="opacity:0;transition:opacity 0.4s;color:rgba(200,120,255,0.85);margin-top:4px;overflow:visible">
@@ -4510,7 +5023,7 @@ const STYLES = `
 /* status panel layout */
 .sp-row-with-btns{display:flex;align-items:flex-start;gap:6px;min-width:0}
 .sp-scroll-col{flex:1;min-width:0;overflow:hidden;display:flex;flex-direction:column}
-.sp-mode-btns{display:flex;flex-direction:column;gap:4px;flex-shrink:0;width:68px}
+.sp-mode-btns{display:flex;flex-direction:column;gap:4px;flex-shrink:0;width:68px;margin-top:-4px}
 .sp-scroll-wrap{overflow:hidden;position:relative;min-width:0;transition:height 0.45s cubic-bezier(0.25,0.8,0.25,1)}
 .sp-env-wrap{height:22px}
 .sp-scroll-inner{display:flex;flex-direction:column;transition:transform 0.55s cubic-bezier(0.25,0.8,0.25,1)}
@@ -4754,6 +5267,58 @@ canvas#mg{
 .btn-auto-active:active{
   box-shadow:0 0px 0 rgba(10,100,40,0.55),0 1px 4px rgba(40,200,100,0.1),inset 0 2px 3px rgba(0,0,0,0.2);
 }
+.btn-settings{
+  background:rgba(255,255,255,0.06);
+  border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);
+  font-size:13px;border-radius:8px;padding:5px 4px;
+  cursor:pointer;width:100%;
+  box-shadow:0 3px 0 rgba(0,0,0,0.4),0 4px 8px rgba(0,0,0,0.2),inset 0 1px 0 rgba(255,255,255,0.08);
+  transition:all 0.1s;
+  transform:perspective(200px) rotateX(0deg) translateY(0px)
+}
+.btn-settings:active{
+  transform:perspective(200px) rotateX(8deg) translateY(3px);
+  box-shadow:0 0 0 rgba(0,0,0,0.4),inset 0 2px 3px rgba(0,0,0,0.25);
+}
+.btn-settings.asp-open{
+  background:rgba(255,200,60,0.18);
+  border-color:rgba(255,200,60,0.5);color:rgba(255,220,80,1);
+  box-shadow:0 3px 0 rgba(120,80,0,0.5),0 4px 10px rgba(255,180,0,0.15),inset 0 1px 0 rgba(255,220,60,0.15);
+}
+/* Settings panel */
+.auto-settings-panel{
+  margin:6px 0 0 0;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px;padding:10px 12px 10px;
+  animation:asp-in 0.18s cubic-bezier(.25,.8,.25,1);
+}
+@keyframes asp-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.asp-title{font-size:12px;font-weight:700;color:rgba(255,220,80,0.9);margin-bottom:8px;letter-spacing:.3px}
+.asp-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.asp-lbl{font-size:11px;color:rgba(255,255,255,0.6);font-weight:600}
+.asp-delay-wrap{display:flex;align-items:center;gap:5px}
+.asp-step{
+  background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.8);font-size:15px;font-weight:700;
+  border-radius:6px;width:26px;height:26px;cursor:pointer;padding:0;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+}
+.asp-step:active{background:rgba(255,255,255,0.2)}
+.asp-delay-val{font-size:18px;font-weight:800;color:rgba(255,220,80,1);min-width:24px;text-align:center}
+.asp-delay-unit{font-size:11px;color:rgba(255,255,255,0.5)}
+.asp-dev-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:2px}
+.asp-dev-chip{
+  display:flex;align-items:center;gap:4px;
+  padding:4px 8px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);
+  color:rgba(255,255,255,0.5);transition:all 0.15s;user-select:none;
+}
+.asp-dev-chip.on{
+  background:rgba(60,200,120,0.18);border-color:rgba(60,220,120,0.5);
+  color:rgba(80,250,145,1);
+}
+.asp-dev-chip.on::before{content:"✓ ";font-size:10px}
 
 /* ── Device row ── */
 .dev-wrap{position:relative;padding:3px 0 14px;overflow:hidden}
@@ -5212,7 +5777,7 @@ customElements.define('ha-smart-room-card', HASmartRoomCard);
 
 // ═══════════════════════════════════════════════════════════════
 //  VISUAL EDITOR — HA Smart Room Card
-//  v1.0.0 · Designed by @doanlong1412 from 🇻🇳 Vietnam
+//  v1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam
 // ═══════════════════════════════════════════════════════════════
 
 // ─── i18n ─────────────────────────────────────────────────────
@@ -5253,6 +5818,56 @@ const HSRC_TRANSLATIONS = {
     edColorsReset: '↩ Đặt lại màu về mặc định',
     edRoomTitle: '🏷 Tên hiển thị (Smart Home)',
     edRoomTitlePlaceholder: 'vd. Phòng Làm Việc, Phòng Ngủ...',
+    edSensorsTitle: 'Cảm biến trong phòng',
+    edAcTitle: 'Điều hòa',
+    edOutdoorTitle: 'Cảm biến ngoài trời',
+    edAcEntity: '❄️ Thực thể điều hòa (climate.*)',
+    edDevicesTitle: 'Thiết bị',
+    edAddDevPlaceholder: '— Chọn loại thiết bị —',
+    edAddDevLight: '💡 Đèn thường (light)',
+    edAddDevRgb: '🌈 Đèn RGB (light + effect)',
+    edAddDevFan: '🌀 Quạt (switch)',
+    edAddDevOutlet: '🔌 Ổ cắm (switch + xác nhận)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Cảm biến (sensor)',
+    edAddBtn: '+ Thêm',
+    edNoDevices: 'Chưa có thiết bị nào. Nhấn "+ Thêm" để bắt đầu.',
+    edAutoTitle: 'Tự động hóa',
+    edSyncTitle: '🔄 Chế độ đồng bộ',
+    edSyncLocal: '💾 Local',
+    edSyncLocalSimple: 'ĐƠN GIẢN',
+    edSyncLocalDesc: 'Lưu trong trình duyệt — đơn giản, không cần cài thêm gì',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Đồng bộ giữa nhiều thiết bị qua input_boolean + input_number — cần tạo helpers thủ công',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'KHUYẾN NGHỊ',
+    edSyncIntDesc: 'Chạy server-side — hoạt động kể cả khi đóng browser, đồng bộ hoàn hảo mọi thiết bị',
+    edSyncIntSetup: '✅ <b>Cài đặt một lần:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Custom repositories',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Type: <b>Integration</b>',
+    edSyncIntStep2: 'Tìm <b>HA Smart Room</b> → Install → Restart HA',
+    edSyncIntStep3: 'Settings → Devices & Services → Add Integration → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Quay lại card, nhấn Lưu — card tự đăng ký phòng với integration ✨',
+    edSyncHelpersWarn: '⚠️ Cần tạo 2 Helpers trong HA trước khi dùng.',
+    edHelperBool: '🔘 input_boolean entity',
+    edHelperNum: '🔢 input_number entity',
+    edDelayTitle: '⏱️ Thời gian đếm ngược',
+    edDelayLabel: 'Tắt sau bao nhiêu phút không có người',
+    edDelayUnit: 'phút',
+    edAutoDevTitle: '🔌 Thiết bị sẽ tắt tự động',
+    edAutoDevDesc: 'Bỏ chọn thiết bị bạn KHÔNG muốn tắt tự động',
+    edSensorsSection: '📡 Cảm biến & Thiết bị',
+    tvControlBtn: '📺 Điều khiển',
+    tvModalTitle: '📺 Điều Khiển TV',
+    tvPower: 'Nguồn',
+    tvMute: 'Tắt tiếng',
+    tvVolDown: 'Âm −',
+    tvVolUp: 'Âm +',
+    tvHome: 'Trang chủ',
+    tvMenu: 'Menu',
+    tvBack: 'Quay lại',
+    tvInput: 'Nguồn vào',
+    tvVolLabel: 'ÂM LƯỢNG',
   },
   en: {
     lang: 'English', flag: 'gb',
@@ -5290,6 +5905,56 @@ const HSRC_TRANSLATIONS = {
     edColorsReset: '↩ Reset colors to default',
     edRoomTitle: '🏷 Room name (Smart Home)',
     edRoomTitlePlaceholder: 'e.g. Office, Bedroom...',
+    edSensorsTitle: 'Indoor sensors',
+    edAcTitle: 'Air conditioner',
+    edOutdoorTitle: 'Outdoor sensors',
+    edAcEntity: '❄️ AC entity (climate.*)',
+    edDevicesTitle: 'Devices',
+    edAddDevPlaceholder: '— Select device type —',
+    edAddDevLight: '💡 Light (light)',
+    edAddDevRgb: '🌈 RGB light (light + effect)',
+    edAddDevFan: '🌀 Fan (switch)',
+    edAddDevOutlet: '🔌 Power outlet (switch + confirm)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensor (sensor)',
+    edAddBtn: '+ Add',
+    edNoDevices: 'No devices yet. Click "+ Add" to start.',
+    edAutoTitle: 'Automation',
+    edSyncTitle: '🔄 Sync mode',
+    edSyncLocal: '💾 Local',
+    edSyncLocalSimple: 'SIMPLE',
+    edSyncLocalDesc: 'Stored in browser — simple, no extra setup needed',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Sync across devices via input_boolean + input_number — requires manual helper creation',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'RECOMMENDED',
+    edSyncIntDesc: 'Runs server-side — works even when browser is closed, perfect sync across all devices',
+    edSyncIntSetup: '✅ <b>One-time setup:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Custom repositories',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Type: <b>Integration</b>',
+    edSyncIntStep2: 'Find <b>HA Smart Room</b> → Install → Restart HA',
+    edSyncIntStep3: 'Settings → Devices & Services → Add Integration → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Back to card, click Save — card auto-registers with integration ✨',
+    edSyncHelpersWarn: '⚠️ Create 2 Helpers in HA before using.',
+    edHelperBool: '🔘 input_boolean entity',
+    edHelperNum: '🔢 input_number entity',
+    edDelayTitle: '⏱️ Countdown timer',
+    edDelayLabel: 'Turn off after how many minutes with no motion',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Devices to auto-off',
+    edAutoDevDesc: 'Uncheck devices you do NOT want turned off automatically',
+    edSensorsSection: '📡 Sensors & Devices',
+    tvControlBtn: '📺 Remote',
+    tvModalTitle: '📺 TV Control',
+    tvPower: 'Power',
+    tvMute: 'Mute',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Home',
+    tvMenu: 'Menu',
+    tvBack: 'Back',
+    tvInput: 'Input',
+    tvVolLabel: 'VOLUME',
   },
   de: {
     lang: 'Deutsch', flag: 'de',
@@ -5327,6 +5992,56 @@ const HSRC_TRANSLATIONS = {
     edColorsReset: '↩ Farben zurücksetzen',
     edRoomTitle: '🏷 Raumname',
     edRoomTitlePlaceholder: 'z.B. Büro, Schlafzimmer...',
+    edSensorsTitle: 'Raumsensoren',
+    edAcTitle: 'Klimaanlage',
+    edOutdoorTitle: 'Außensensoren',
+    edAcEntity: '❄️ Klimaanlage-Entität (climate.*)',
+    edDevicesTitle: 'Geräte',
+    edAddDevPlaceholder: '— Gerätetyp wählen —',
+    edAddDevLight: '💡 Licht (light)',
+    edAddDevRgb: '🌈 RGB-Licht (light + Effekt)',
+    edAddDevFan: '🌀 Ventilator (switch)',
+    edAddDevOutlet: '🔌 Steckdose (switch + Bestätigung)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensor (sensor)',
+    edAddBtn: '+ Hinzufügen',
+    edNoDevices: 'Keine Geräte. Klicke "+ Hinzufügen" um zu starten.',
+    edAutoTitle: 'Automatisierung',
+    edSyncTitle: '🔄 Synchronisierungsmodus',
+    edSyncLocal: '💾 Lokal',
+    edSyncLocalSimple: 'EINFACH',
+    edSyncLocalDesc: 'Im Browser gespeichert — einfach, keine zusätzliche Einrichtung',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synchronisierung über input_boolean + input_number — manuelle Erstellung erforderlich',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'EMPFOHLEN',
+    edSyncIntDesc: 'Läuft serverseitig — funktioniert auch bei geschlossenem Browser',
+    edSyncIntSetup: '✅ <b>Einmalige Einrichtung:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Benutzerdefinierte Repositories',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Typ: <b>Integration</b>',
+    edSyncIntStep2: '<b>HA Smart Room</b> suchen → Installieren → HA neu starten',
+    edSyncIntStep3: 'Einstellungen → Geräte & Dienste → Integration hinzufügen → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Zurück zur Karte, Speichern klicken — Karte registriert sich automatisch ✨',
+    edSyncHelpersWarn: '⚠️ Bitte zuerst 2 Helpers in HA erstellen.',
+    edHelperBool: '🔘 input_boolean Entität',
+    edHelperNum: '🔢 input_number Entität',
+    edDelayTitle: '⏱️ Countdown-Timer',
+    edDelayLabel: 'Nach wie vielen Minuten ohne Bewegung ausschalten',
+    edDelayUnit: 'Min',
+    edAutoDevTitle: '🔌 Automatisch ausschalten',
+    edAutoDevDesc: 'Entfernen Sie Geräte, die NICHT automatisch ausgeschaltet werden sollen',
+    edSensorsSection: '📡 Sensoren & Geräte',
+    tvControlBtn: '📺 Fernbedienung',
+    tvModalTitle: '📺 TV Steuerung',
+    tvPower: 'Ein/Aus',
+    tvMute: 'Stumm',
+    tvVolDown: 'Laut −',
+    tvVolUp: 'Laut +',
+    tvHome: 'Startseite',
+    tvMenu: 'Menü',
+    tvBack: 'Zurück',
+    tvInput: 'Eingang',
+    tvVolLabel: 'LAUTSTÄRKE',
   },
   fr: {
     lang: 'Français', flag: 'fr',
@@ -5364,6 +6079,56 @@ const HSRC_TRANSLATIONS = {
     edColorsReset: '↩ Réinitialiser les couleurs',
     edRoomTitle: '🏷 Nom de la pièce',
     edRoomTitlePlaceholder: 'ex. Bureau, Chambre...',
+    edSensorsTitle: 'Capteurs intérieurs',
+    edAcTitle: 'Climatiseur',
+    edOutdoorTitle: 'Capteurs extérieurs',
+    edAcEntity: '❄️ Entité climatiseur (climate.*)',
+    edDevicesTitle: 'Appareils',
+    edAddDevPlaceholder: '— Choisir le type —',
+    edAddDevLight: '💡 Lumière (light)',
+    edAddDevRgb: '🌈 Lumière RGB (light + effet)',
+    edAddDevFan: '🌀 Ventilateur (switch)',
+    edAddDevOutlet: '🔌 Prise électrique (switch + confirm)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Capteur (sensor)',
+    edAddBtn: '+ Ajouter',
+    edNoDevices: 'Aucun appareil. Cliquez sur "+ Ajouter" pour commencer.',
+    edAutoTitle: 'Automatisation',
+    edSyncTitle: '🔄 Mode de synchronisation',
+    edSyncLocal: '💾 Local',
+    edSyncLocalSimple: 'SIMPLE',
+    edSyncLocalDesc: 'Stocké dans le navigateur — simple, aucune configuration supplémentaire',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synchronisation via input_boolean + input_number — création manuelle requise',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'RECOMMANDÉ',
+    edSyncIntDesc: 'Fonctionne côté serveur — même navigateur fermé, sync parfaite',
+    edSyncIntSetup: '✅ <b>Configuration unique :</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Dépôts personnalisés',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Type: <b>Integration</b>',
+    edSyncIntStep2: 'Trouver <b>HA Smart Room</b> → Installer → Redémarrer HA',
+    edSyncIntStep3: 'Paramètres → Appareils & Services → Ajouter intégration → <b>HA Smart Room</b>',
+    edSyncIntStep4: "Retour à la carte, cliquer Enregistrer — la carte s'enregistre automatiquement ✨",
+    edSyncHelpersWarn: "⚠️ Créez 2 Helpers dans HA avant d'utiliser.",
+    edHelperBool: '🔘 Entité input_boolean',
+    edHelperNum: '🔢 Entité input_number',
+    edDelayTitle: '⏱️ Minuterie',
+    edDelayLabel: 'Éteindre après combien de minutes sans mouvement',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Appareils à éteindre automatiquement',
+    edAutoDevDesc: 'Décochez les appareils que vous ne souhaitez PAS éteindre automatiquement',
+    edSensorsSection: '📡 Capteurs & Appareils',
+    tvControlBtn: '📺 Télécommande',
+    tvModalTitle: '📺 Contrôle TV',
+    tvPower: 'Marche/Arrêt',
+    tvMute: 'Muet',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Accueil',
+    tvMenu: 'Menu',
+    tvBack: 'Retour',
+    tvInput: 'Source',
+    tvVolLabel: 'VOLUME',
   },
   nl: {
     lang: 'Nederlands', flag: 'nl',
@@ -5387,6 +6152,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Apparaattijdlijn', edShowTimelineDesc: 'Tijdlijn AC/deur/beweging weergeven',
     colorLabel: 'Geavanceerde kleuren', edColorsReset: '↩ Kleuren herstellen',
     edRoomTitle: '🏷 Kamernaam', edRoomTitlePlaceholder: 'bijv. Kantoor, Slaapkamer...',
+    edSensorsTitle: 'Binnensensoren',
+    edAcTitle: 'Airconditioning',
+    edOutdoorTitle: 'Buitensensoren',
+    edAcEntity: '❄️ Airco entiteit (climate.*)',
+    edDevicesTitle: 'Apparaten',
+    edAddDevPlaceholder: '— Selecteer type —',
+    edAddDevLight: '💡 Lamp (light)',
+    edAddDevRgb: '🌈 RGB-lamp (light + effect)',
+    edAddDevFan: '🌀 Ventilator (switch)',
+    edAddDevOutlet: '🔌 Stopcontact (switch + bevestiging)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensor (sensor)',
+    edAddBtn: '+ Toevoegen',
+    edNoDevices: 'Geen apparaten. Klik op "+ Toevoegen" om te beginnen.',
+    edAutoTitle: 'Automatisering',
+    edSyncTitle: '🔄 Synchronisatiemodus',
+    edSyncLocal: '💾 Lokaal',
+    edSyncLocalSimple: 'EENVOUDIG',
+    edSyncLocalDesc: 'Opgeslagen in browser — eenvoudig, geen extra instelling',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synchroniseer via input_boolean + input_number — handmatig aanmaken vereist',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'AANBEVOLEN',
+    edSyncIntDesc: 'Draait server-side — werkt ook bij gesloten browser',
+    edSyncIntSetup: '✅ <b>Eenmalige instelling:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Aangepaste repositories',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Type: <b>Integration</b>',
+    edSyncIntStep2: '<b>HA Smart Room</b> zoeken → Installeren → HA herstarten',
+    edSyncIntStep3: 'Instellingen → Apparaten & Diensten → Integratie toevoegen → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Terug naar kaart, Opslaan klikken — kaart registreert automatisch ✨',
+    edSyncHelpersWarn: '⚠️ Maak eerst 2 Helpers aan in HA.',
+    edHelperBool: '🔘 input_boolean entiteit',
+    edHelperNum: '🔢 input_number entiteit',
+    edDelayTitle: '⏱️ Afteltimer',
+    edDelayLabel: 'Uitschakelen na hoeveel minuten zonder beweging',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Apparaten automatisch uitschakelen',
+    edAutoDevDesc: 'Schakel apparaten uit die u NIET automatisch wilt uitschakelen',
+    edSensorsSection: '📡 Sensoren & Apparaten',
+    tvControlBtn: '📺 Afstandsbediening',
+    tvModalTitle: '📺 TV Bediening',
+    tvPower: 'Aan/Uit',
+    tvMute: 'Dempen',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Home',
+    tvMenu: 'Menu',
+    tvBack: 'Terug',
+    tvInput: 'Ingang',
+    tvVolLabel: 'VOLUME',
   },
   pl: {
     lang: 'Polski', flag: 'pl',
@@ -5410,6 +6225,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Oś czasu', edShowTimelineDesc: 'Pokaż oś czasu AC/drzwi/ruchu',
     colorLabel: 'Zaawansowane kolory', edColorsReset: '↩ Resetuj kolory',
     edRoomTitle: '🏷 Nazwa pokoju', edRoomTitlePlaceholder: 'np. Biuro, Sypialnia...',
+    edSensorsTitle: 'Czujniki wewnętrzne',
+    edAcTitle: 'Klimatyzacja',
+    edOutdoorTitle: 'Czujniki zewnętrzne',
+    edAcEntity: '❄️ Encja klimatyzacji (climate.*)',
+    edDevicesTitle: 'Urządzenia',
+    edAddDevPlaceholder: '— Wybierz typ urządzenia —',
+    edAddDevLight: '💡 Światło (light)',
+    edAddDevRgb: '🌈 Światło RGB (light + efekt)',
+    edAddDevFan: '🌀 Wentylator (switch)',
+    edAddDevOutlet: '🔌 Gniazdo (switch + potwierdzenie)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Czujnik (sensor)',
+    edAddBtn: '+ Dodaj',
+    edNoDevices: 'Brak urządzeń. Kliknij "+ Dodaj" aby zacząć.',
+    edAutoTitle: 'Automatyzacja',
+    edSyncTitle: '🔄 Tryb synchronizacji',
+    edSyncLocal: '💾 Lokalny',
+    edSyncLocalSimple: 'PROSTY',
+    edSyncLocalDesc: 'Zapisane w przeglądarce — proste, bez dodatkowej konfiguracji',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synchronizacja przez input_boolean + input_number — wymaga ręcznego tworzenia',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'ZALECANE',
+    edSyncIntDesc: 'Działa po stronie serwera — działa nawet przy zamkniętej przeglądarce',
+    edSyncIntSetup: '✅ <b>Jednorazowa konfiguracja:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Niestandardowe repozytoria',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Typ: <b>Integration</b>',
+    edSyncIntStep2: 'Znajdź <b>HA Smart Room</b> → Zainstaluj → Zrestartuj HA',
+    edSyncIntStep3: 'Ustawienia → Urządzenia & Usługi → Dodaj integrację → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Wróć do karty, kliknij Zapisz — karta rejestruje się automatycznie ✨',
+    edSyncHelpersWarn: '⚠️ Utwórz 2 Helpers w HA przed użyciem.',
+    edHelperBool: '🔘 Encja input_boolean',
+    edHelperNum: '🔢 Encja input_number',
+    edDelayTitle: '⏱️ Licznik',
+    edDelayLabel: 'Wyłącz po ilu minutach bez ruchu',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Urządzenia do automatycznego wyłączenia',
+    edAutoDevDesc: 'Odznacz urządzenia, których NIE chcesz automatycznie wyłączać',
+    edSensorsSection: '📡 Czujniki & Urządzenia',
+    tvControlBtn: '📺 Pilot',
+    tvModalTitle: '📺 Sterowanie TV',
+    tvPower: 'Zasilanie',
+    tvMute: 'Wycisz',
+    tvVolDown: 'Głos −',
+    tvVolUp: 'Głos +',
+    tvHome: 'Start',
+    tvMenu: 'Menu',
+    tvBack: 'Wstecz',
+    tvInput: 'Źródło',
+    tvVolLabel: 'GŁOŚNOŚĆ',
   },
   sv: {
     lang: 'Svenska', flag: 'se',
@@ -5433,6 +6298,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Enhetstidslinje', edShowTimelineDesc: 'Visa tidslinje AC/dörr/rörelse',
     colorLabel: 'Avancerade färger', edColorsReset: '↩ Återställ färger',
     edRoomTitle: '🏷 Rumsnamn', edRoomTitlePlaceholder: 't.ex. Kontor, Sovrum...',
+    edSensorsTitle: 'Inomhussensorer',
+    edAcTitle: 'Luftkonditionering',
+    edOutdoorTitle: 'Utomhussensorer',
+    edAcEntity: '❄️ AC-entitet (climate.*)',
+    edDevicesTitle: 'Enheter',
+    edAddDevPlaceholder: '— Välj enhetstyp —',
+    edAddDevLight: '💡 Lampa (light)',
+    edAddDevRgb: '🌈 RGB-lampa (light + effekt)',
+    edAddDevFan: '🌀 Fläkt (switch)',
+    edAddDevOutlet: '🔌 Eluttag (switch + bekräftelse)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensor (sensor)',
+    edAddBtn: '+ Lägg till',
+    edNoDevices: 'Inga enheter. Klicka på "+ Lägg till" för att börja.',
+    edAutoTitle: 'Automatisering',
+    edSyncTitle: '🔄 Synkroniseringsläge',
+    edSyncLocal: '💾 Lokalt',
+    edSyncLocalSimple: 'ENKELT',
+    edSyncLocalDesc: 'Lagras i webbläsaren — enkelt, ingen extra inställning',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synkronisering via input_boolean + input_number — kräver manuellt skapande',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'REKOMMENDERAS',
+    edSyncIntDesc: 'Körs server-side — fungerar även med stängd webbläsare',
+    edSyncIntSetup: '✅ <b>Engångsinställning:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Anpassade förråd',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Typ: <b>Integration</b>',
+    edSyncIntStep2: 'Hitta <b>HA Smart Room</b> → Installera → Starta om HA',
+    edSyncIntStep3: 'Inställningar → Enheter & Tjänster → Lägg till integration → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Tillbaka till kortet, klicka Spara — kortet registrerar sig automatiskt ✨',
+    edSyncHelpersWarn: '⚠️ Skapa 2 Helpers i HA innan du använder.',
+    edHelperBool: '🔘 input_boolean entitet',
+    edHelperNum: '🔢 input_number entitet',
+    edDelayTitle: '⏱️ Nedräkningstimer',
+    edDelayLabel: 'Stäng av efter hur många minuter utan rörelse',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Enheter att stänga av automatiskt',
+    edAutoDevDesc: 'Avmarkera enheter du INTE vill stänga av automatiskt',
+    edSensorsSection: '📡 Sensorer & Enheter',
+    tvControlBtn: '📺 Fjärrkontroll',
+    tvModalTitle: '📺 TV Kontroll',
+    tvPower: 'På/Av',
+    tvMute: 'Ljud av',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Hem',
+    tvMenu: 'Meny',
+    tvBack: 'Tillbaka',
+    tvInput: 'Källa',
+    tvVolLabel: 'VOLYM',
   },
   hu: {
     lang: 'Magyar', flag: 'hu',
@@ -5456,6 +6371,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Eszköz idősor', edShowTimelineDesc: 'AC/ajtó/mozgás idősor',
     colorLabel: 'Speciális színek', edColorsReset: '↩ Színek visszaállítása',
     edRoomTitle: '🏷 Szoba neve', edRoomTitlePlaceholder: 'pl. Iroda, Hálószoba...',
+    edSensorsTitle: 'Beltéri érzékelők',
+    edAcTitle: 'Légkondicionáló',
+    edOutdoorTitle: 'Kültéri érzékelők',
+    edAcEntity: '❄️ Légkondicionáló entitás (climate.*)',
+    edDevicesTitle: 'Eszközök',
+    edAddDevPlaceholder: '— Eszköztípus kiválasztása —',
+    edAddDevLight: '💡 Lámpa (light)',
+    edAddDevRgb: '🌈 RGB lámpa (light + effekt)',
+    edAddDevFan: '🌀 Ventilátor (switch)',
+    edAddDevOutlet: '🔌 Aljzat (switch + megerősítés)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Érzékelő (sensor)',
+    edAddBtn: '+ Hozzáadás',
+    edNoDevices: 'Nincsenek eszközök. Kattints a "+ Hozzáadás"-ra.',
+    edAutoTitle: 'Automatizálás',
+    edSyncTitle: '🔄 Szinkronizálási mód',
+    edSyncLocal: '💾 Helyi',
+    edSyncLocalSimple: 'EGYSZERŰ',
+    edSyncLocalDesc: 'Böngészőben tárolva — egyszerű, nincs extra beállítás',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Szinkronizálás input_boolean + input_number segítségével — kézi létrehozás szükséges',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'AJÁNLOTT',
+    edSyncIntDesc: 'Szerver oldalon fut — akkor is működik, ha a böngésző zárva van',
+    edSyncIntSetup: '✅ <b>Egyszeri beállítás:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Egyéni tárolók',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Típus: <b>Integration</b>',
+    edSyncIntStep2: '<b>HA Smart Room</b> keresése → Telepítés → HA újraindítás',
+    edSyncIntStep3: 'Beállítások → Eszközök & Szolgáltatások → Integráció hozzáadása → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Vissza a kártyához, Mentés kattintás — a kártya automatikusan regisztrál ✨',
+    edSyncHelpersWarn: '⚠️ Hozz létre 2 Helpers-t a HA-ban használat előtt.',
+    edHelperBool: '🔘 input_boolean entitás',
+    edHelperNum: '🔢 input_number entitás',
+    edDelayTitle: '⏱️ Visszaszámlálás',
+    edDelayLabel: 'Kapcsoljon ki ennyi perc mozgás nélkül',
+    edDelayUnit: 'perc',
+    edAutoDevTitle: '🔌 Automatikusan kikapcsolandó eszközök',
+    edAutoDevDesc: 'Törölje a jelölést azon eszközöknél, amelyeket NEM akar automatikusan kikapcsolni',
+    edSensorsSection: '📡 Érzékelők & Eszközök',
+    tvControlBtn: '📺 Távirányító',
+    tvModalTitle: '📺 TV Vezérlés',
+    tvPower: 'Be/Ki',
+    tvMute: 'Némítás',
+    tvVolDown: 'Hangerő −',
+    tvVolUp: 'Hangerő +',
+    tvHome: 'Főoldal',
+    tvMenu: 'Menü',
+    tvBack: 'Vissza',
+    tvInput: 'Forrás',
+    tvVolLabel: 'HANGERŐ',
   },
   cs: {
     lang: 'Čeština', flag: 'cz',
@@ -5479,6 +6444,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Časová osa zařízení', edShowTimelineDesc: 'Zobrazit časovou osu AC/dveře/pohyb',
     colorLabel: 'Pokročilé barvy', edColorsReset: '↩ Obnovit barvy',
     edRoomTitle: '🏷 Název místnosti', edRoomTitlePlaceholder: 'např. Kancelář, Ložnice...',
+    edSensorsTitle: 'Vnitřní senzory',
+    edAcTitle: 'Klimatizace',
+    edOutdoorTitle: 'Venkovní senzory',
+    edAcEntity: '❄️ Entita klimatizace (climate.*)',
+    edDevicesTitle: 'Zařízení',
+    edAddDevPlaceholder: '— Vyberte typ zařízení —',
+    edAddDevLight: '💡 Světlo (light)',
+    edAddDevRgb: '🌈 RGB světlo (light + efekt)',
+    edAddDevFan: '🌀 Ventilátor (switch)',
+    edAddDevOutlet: '🔌 Zásuvka (switch + potvrzení)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Senzor (sensor)',
+    edAddBtn: '+ Přidat',
+    edNoDevices: 'Žádná zařízení. Klikněte na "+ Přidat" pro začátek.',
+    edAutoTitle: 'Automatizace',
+    edSyncTitle: '🔄 Režim synchronizace',
+    edSyncLocal: '💾 Lokální',
+    edSyncLocalSimple: 'JEDNODUCHÉ',
+    edSyncLocalDesc: 'Uloženo v prohlížeči — jednoduché, bez další konfigurace',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Synchronizace přes input_boolean + input_number — nutné ruční vytvoření',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'DOPORUČENO',
+    edSyncIntDesc: 'Běží na serveru — funguje i při zavřeném prohlížeči',
+    edSyncIntSetup: '✅ <b>Jednorázové nastavení:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Vlastní repozitáře',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Typ: <b>Integration</b>',
+    edSyncIntStep2: 'Najít <b>HA Smart Room</b> → Instalovat → Restartovat HA',
+    edSyncIntStep3: 'Nastavení → Zařízení & Služby → Přidat integraci → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Zpět na kartu, kliknout Uložit — karta se automaticky zaregistruje ✨',
+    edSyncHelpersWarn: '⚠️ Nejprve vytvořte 2 Helpers v HA.',
+    edHelperBool: '🔘 Entita input_boolean',
+    edHelperNum: '🔢 Entita input_number',
+    edDelayTitle: '⏱️ Časovač odpočtu',
+    edDelayLabel: 'Vypnout po kolika minutách bez pohybu',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Zařízení pro automatické vypnutí',
+    edAutoDevDesc: 'Odznačte zařízení, která NECHCETE automaticky vypínat',
+    edSensorsSection: '📡 Senzory & Zařízení',
+    tvControlBtn: '📺 Dálkové ovládání',
+    tvModalTitle: '📺 Ovládání TV',
+    tvPower: 'Napájení',
+    tvMute: 'Ztlumit',
+    tvVolDown: 'Hlasitost −',
+    tvVolUp: 'Hlasitost +',
+    tvHome: 'Domů',
+    tvMenu: 'Nabídka',
+    tvBack: 'Zpět',
+    tvInput: 'Vstup',
+    tvVolLabel: 'HLASITOST',
   },
   it: {
     lang: 'Italiano', flag: 'it',
@@ -5502,6 +6517,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Cronologia dispositivi', edShowTimelineDesc: 'Mostra cronologia AC/porta/movimento',
     colorLabel: 'Colori avanzati', edColorsReset: '↩ Ripristina colori',
     edRoomTitle: '🏷 Nome stanza', edRoomTitlePlaceholder: 'es. Ufficio, Camera...',
+    edSensorsTitle: 'Sensori interni',
+    edAcTitle: 'Condizionatore',
+    edOutdoorTitle: 'Sensori esterni',
+    edAcEntity: '❄️ Entità condizionatore (climate.*)',
+    edDevicesTitle: 'Dispositivi',
+    edAddDevPlaceholder: '— Seleziona tipo dispositivo —',
+    edAddDevLight: '💡 Luce (light)',
+    edAddDevRgb: '🌈 Luce RGB (light + effetto)',
+    edAddDevFan: '🌀 Ventilatore (switch)',
+    edAddDevOutlet: '🔌 Presa elettrica (switch + conferma)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensore (sensor)',
+    edAddBtn: '+ Aggiungi',
+    edNoDevices: 'Nessun dispositivo. Clicca "+ Aggiungi" per iniziare.',
+    edAutoTitle: 'Automazione',
+    edSyncTitle: '🔄 Modalità di sincronizzazione',
+    edSyncLocal: '💾 Locale',
+    edSyncLocalSimple: 'SEMPLICE',
+    edSyncLocalDesc: 'Salvato nel browser — semplice, nessuna configurazione extra',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Sincronizzazione tramite input_boolean + input_number — creazione manuale richiesta',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'CONSIGLIATO',
+    edSyncIntDesc: 'Esegue lato server — funziona anche con browser chiuso',
+    edSyncIntSetup: '✅ <b>Configurazione una tantum:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Repository personalizzati',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Tipo: <b>Integration</b>',
+    edSyncIntStep2: 'Trovare <b>HA Smart Room</b> → Installa → Riavvia HA',
+    edSyncIntStep3: 'Impostazioni → Dispositivi & Servizi → Aggiungi integrazione → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Torna alla scheda, clicca Salva — la scheda si registra automaticamente ✨',
+    edSyncHelpersWarn: '⚠️ Crea prima 2 Helpers in HA.',
+    edHelperBool: '🔘 Entità input_boolean',
+    edHelperNum: '🔢 Entità input_number',
+    edDelayTitle: '⏱️ Timer conto alla rovescia',
+    edDelayLabel: 'Spegnere dopo quanti minuti senza movimento',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Dispositivi da spegnere automaticamente',
+    edAutoDevDesc: 'Deseleziona i dispositivi che NON vuoi spegnere automaticamente',
+    edSensorsSection: '📡 Sensori & Dispositivi',
+    tvControlBtn: '📺 Telecomando',
+    tvModalTitle: '📺 Controllo TV',
+    tvPower: 'Accensione',
+    tvMute: 'Muto',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Home',
+    tvMenu: 'Menu',
+    tvBack: 'Indietro',
+    tvInput: 'Sorgente',
+    tvVolLabel: 'VOLUME',
   },
   pt: {
     lang: 'Português', flag: 'pt',
@@ -5525,6 +6590,56 @@ const HSRC_TRANSLATIONS = {
     edShowTimeline: 'Linha do tempo', edShowTimelineDesc: 'Mostrar linha do tempo AC/porta/movimento',
     colorLabel: 'Cores avançadas', edColorsReset: '↩ Repor cores',
     edRoomTitle: '🏷 Nome do quarto', edRoomTitlePlaceholder: 'ex. Escritório, Quarto...',
+    edSensorsTitle: 'Sensores interiores',
+    edAcTitle: 'Ar condicionado',
+    edOutdoorTitle: 'Sensores exteriores',
+    edAcEntity: '❄️ Entidade AC (climate.*)',
+    edDevicesTitle: 'Dispositivos',
+    edAddDevPlaceholder: '— Selecionar tipo —',
+    edAddDevLight: '💡 Luz (light)',
+    edAddDevRgb: '🌈 Luz RGB (light + efeito)',
+    edAddDevFan: '🌀 Ventilador (switch)',
+    edAddDevOutlet: '🔌 Tomada (switch + confirmação)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Sensor (sensor)',
+    edAddBtn: '+ Adicionar',
+    edNoDevices: 'Sem dispositivos. Clique em "+ Adicionar" para começar.',
+    edAutoTitle: 'Automação',
+    edSyncTitle: '🔄 Modo de sincronização',
+    edSyncLocal: '💾 Local',
+    edSyncLocalSimple: 'SIMPLES',
+    edSyncLocalDesc: 'Guardado no browser — simples, sem configuração extra',
+    edSyncHelpers: '🔘 HA Helpers',
+    edSyncHelpersDesc: 'Sincronização via input_boolean + input_number — criação manual necessária',
+    edSyncIntegration: '🧠 HA Smart Room Integration',
+    edSyncIntRecommended: 'RECOMENDADO',
+    edSyncIntDesc: 'Corre no servidor — funciona mesmo com browser fechado',
+    edSyncIntSetup: '✅ <b>Configuração única:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Repositórios personalizados',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Tipo: <b>Integration</b>',
+    edSyncIntStep2: 'Encontrar <b>HA Smart Room</b> → Instalar → Reiniciar HA',
+    edSyncIntStep3: 'Configurações → Dispositivos & Serviços → Adicionar integração → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Voltar ao card, clicar Guardar — o card regista-se automaticamente ✨',
+    edSyncHelpersWarn: '⚠️ Crie 2 Helpers no HA antes de usar.',
+    edHelperBool: '🔘 Entidade input_boolean',
+    edHelperNum: '🔢 Entidade input_number',
+    edDelayTitle: '⏱️ Temporizador',
+    edDelayLabel: 'Desligar após quantos minutos sem movimento',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Dispositivos a desligar automaticamente',
+    edAutoDevDesc: 'Desmarque dispositivos que NÃO quer desligar automaticamente',
+    edSensorsSection: '📡 Sensores & Dispositivos',
+    tvControlBtn: '📺 Controlo Remoto',
+    tvModalTitle: '📺 Controlo TV',
+    tvPower: 'Liga/Desliga',
+    tvMute: 'Mudo',
+    tvVolDown: 'Vol −',
+    tvVolUp: 'Vol +',
+    tvHome: 'Início',
+    tvMenu: 'Menu',
+    tvBack: 'Voltar',
+    tvInput: 'Fonte',
+    tvVolLabel: 'VOLUME',
   },
 };
 
@@ -5708,12 +6823,14 @@ class HASmartRoomCardEditor extends HTMLElement {
   }
 
   _renderDeviceList(cfg) {
+    const t    = this.t;
     const list = this._getDeviceList(cfg);
-    if (!list.length) return `<div style="color:var(--secondary-text-color);font-size:12px;padding:8px 0;">Chưa có thiết bị nào. Nhấn "+ Thêm" để bắt đầu.</div>`;
+    if (!list.length) return `<div style="color:var(--secondary-text-color);font-size:12px;padding:8px 0;">${t.edNoDevices}</div>`;
     return list.map(d => this._deviceRow(d, cfg)).join('');
   }
 
   _deviceRow(d, cfg) {
+    const t = this.t;
     const domainMap = { den: 'light,switch', rgb: 'light', quat: 'fan,switch', tv: 'media_player,remote', sensor: 'sensor,binary_sensor,climate,switch' };
     const domain = d.domain || domainMap[d.type] || '';
     const ek = d.entityKey || (d.id + '_entity');
@@ -5736,7 +6853,7 @@ class HASmartRoomCardEditor extends HTMLElement {
       <button class="dv-arr-btn" data-dv-dn="${d.id}" title="Xuống">▼</button>
     </div>
     <input class="dv-name-inp" type="text" data-dv-label="${d.id}" value="${d.label.replace(/"/g,'&quot;')}" placeholder="Tên hiển thị"/>
-    <button class="dv-del-btn" data-dv-del="${d.id}" title="Xóa thiết bị">✕</button>
+    <button class="dv-del-btn" data-dv-del="${d.id}" title="${t.delDevTitle}">✕</button>
   </div>
   <ha-entity-picker class="dv-picker" data-key="${ek}" data-domain="${domain}" allow-custom-entity></ha-entity-picker>${d.id === 'ocam' ? `
   <div class="dv-mdi-row" style="margin-top:6px">
@@ -5968,7 +7085,7 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── Credit ── -->
   <div class="credit">
     🏠 <strong>HA Smart Room Card</strong>
-    <span class="credit-ver">v1.0.0 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
+    <span class="credit-ver">v1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
   </div>
 
   <!-- ── TikTok link ── -->
@@ -6024,19 +7141,19 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── 1. Sensors ── -->
   <div class="acc-wrap">
     <div class="acc-head" id="head-sensors">
-      <ha-icon icon="mdi:broadcast"></ha-icon> ${t.edEntities} — Cảm biến
+      <ha-icon icon="mdi:broadcast"></ha-icon> ${t.edSensorsSection}
       <span class="acc-arrow" id="arrow-sensors">${this._open.sensors?'▾':'▸'}</span>
     </div>
     <div class="acc-body" id="body-sensors" style="display:${this._open.sensors?'block':'none'}">
-      <div class="sec-title">📍 Cảm biến trong phòng</div>
+      <div class="sec-title">📍 ${t.edSensorsTitle}</div>
       ${this._entityField('temp_entity',   t.edTemp,   'sensor')}
       ${this._entityField('humi_entity',   t.edHumi,   'sensor')}
       ${this._entityField('power_entity',  t.edPower,  'sensor')}
       ${this._entityField('door_entity',   t.edDoor,   'binary_sensor')}
       ${this._entityField('motion_entity', t.edMotion, 'binary_sensor')}
-      <div class="sec-title">❄️ Điều hòa</div>
-      ${this._entityField('ac_entity', '❄️ Thực thể điều hòa', 'climate')}
-      <div class="sec-title">🌤 Cảm biến ngoài trời</div>
+      <div class="sec-title">❄️ ${t.edAcTitle}</div>
+      ${this._entityField('ac_entity', t.edAcEntity, 'climate')}
+      <div class="sec-title">🌤 ${t.edOutdoorTitle}</div>
       ${this._entityField('temp_out_entity', t.edTempOut, 'sensor')}
       ${this._entityField('humi_out_entity', t.edHumiOut, 'sensor')}
     </div>
@@ -6045,7 +7162,7 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── 2. Devices ── -->
   <div class="acc-wrap">
     <div class="acc-head" id="head-devices">
-      <ha-icon icon="mdi:devices"></ha-icon> ${t.edEntities} — Thiết bị
+      <ha-icon icon="mdi:devices"></ha-icon> ${t.edEntities} — ${t.edDevicesTitle}
       <span class="acc-arrow" id="arrow-devices">${this._open.devices?'▾':'▸'}</span>
     </div>
     <div class="acc-body" id="body-devices" style="display:${this._open.devices?'block':'none'}">
@@ -6055,15 +7172,15 @@ class HASmartRoomCardEditor extends HTMLElement {
       <!-- Add device row -->
       <div class="add-dev-row">
         <select id="add-dev-type" class="add-dev-select">
-          <option value="">— Chọn loại thiết bị —</option>
-          <option value="den">💡 Đèn thường (light)</option>
-          <option value="rgb">🌈 Đèn RGB (light + effect)</option>
-          <option value="quat">🌀 Quạt (switch)</option>
-          <option value="ocam">🔌 Ổ cắm (switch + xác nhận)</option>
-          <option value="tv">📺 TV (media_player)</option>
-          <option value="sensor">📡 Cảm biến (sensor)</option>
+          <option value="">${t.edAddDevPlaceholder}</option>
+          <option value="den">${t.edAddDevLight}</option>
+          <option value="rgb">${t.edAddDevRgb}</option>
+          <option value="quat">${t.edAddDevFan}</option>
+          <option value="ocam">${t.edAddDevOutlet}</option>
+          <option value="tv">${t.edAddDevTv}</option>
+          <option value="sensor">${t.edAddDevSensor}</option>
         </select>
-        <button class="add-dev-btn" id="btn-add-dev">+ Thêm</button>
+        <button class="add-dev-btn" id="btn-add-dev">${t.edAddBtn}</button>
       </div>
     </div>
   </div>
@@ -6071,58 +7188,61 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── 2b. Automation ── -->
   <div class="acc-wrap">
     <div class="acc-head" id="head-automation">
-      <ha-icon icon="mdi:robot"></ha-icon> Tự động hóa
+      <ha-icon icon="mdi:robot"></ha-icon> ${t.edAutoTitle}
       <span class="acc-arrow" id="arrow-automation">${this._open.automation?'▾':'▸'}</span>
     </div>
     <div class="acc-body" id="body-automation" style="display:${this._open.automation?'block':'none'}">
-      <div class="sec-title" style="margin-bottom:6px">🔄 Chế độ đồng bộ</div>
+      <div class="sec-title" style="margin-bottom:6px">${t.edSyncTitle}</div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;">
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'integration' || !cfg.sync_mode || cfg.sync_mode === 'local' ? (cfg.sync_mode !== 'helpers' && cfg.sync_mode !== 'integration' ? 'var(--primary-color)' : 'var(--divider-color)') : 'var(--divider-color)'};cursor:pointer;background:var(--secondary-background-color)">
-          <input type="radio" name="sync-mode-radio" value="local" ${(!cfg.sync_mode || cfg.sync_mode === 'local') ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
-          <div><div style="font-size:13px;font-weight:600">💾 Local (mặc định)</div><div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">Lưu trong trình duyệt — đơn giản, không cần cài thêm gì</div></div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid var(--divider-color);cursor:pointer;background:var(--secondary-background-color)">
-          <input type="radio" name="sync-mode-radio" value="helpers" ${cfg.sync_mode === 'helpers' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
-          <div><div style="font-size:13px;font-weight:600">🔘 HA Helpers</div><div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">Đồng bộ giữa nhiều thiết bị qua input_boolean + input_number — cần tạo helpers thủ công</div></div>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'integration' ? 'var(--primary-color)' : 'var(--divider-color)'};cursor:pointer;background:${cfg.sync_mode === 'integration' ? 'rgba(0,200,100,0.06)' : 'var(--secondary-background-color)'}">
-          <input type="radio" name="sync-mode-radio" value="integration" ${cfg.sync_mode === 'integration' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'local' ? 'var(--primary-color)' : 'var(--divider-color)'};cursor:pointer;background:var(--secondary-background-color)">
+          <input type="radio" name="sync-mode-radio" value="local" ${cfg.sync_mode === 'local' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
           <div>
-            <div style="font-size:13px;font-weight:600">🧠 HA Smart Room Integration <span style="font-size:10px;background:rgba(0,200,100,0.15);color:rgba(0,200,100,0.9);padding:1px 6px;border-radius:10px;font-weight:700;margin-left:4px">KHUYẾN NGHỊ</span></div>
-            <div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">Chạy server-side — hoạt động kể cả khi đóng browser, đồng bộ hoàn hảo mọi thiết bị</div>
+            <div style="font-size:13px;font-weight:600">${t.edSyncLocal} <span style="font-size:10px;background:rgba(100,160,255,0.15);color:rgba(80,140,255,0.9);padding:1px 6px;border-radius:10px;font-weight:700;margin-left:4px">${t.edSyncLocalSimple}</span></div>
+            <div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">${t.edSyncLocalDesc}</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'helpers' ? 'var(--primary-color)' : 'var(--divider-color)'};cursor:pointer;background:var(--secondary-background-color)">
+          <input type="radio" name="sync-mode-radio" value="helpers" ${cfg.sync_mode === 'helpers' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
+          <div><div style="font-size:13px;font-weight:600">${t.edSyncHelpers}</div><div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">${t.edSyncHelpersDesc}</div></div>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'integration' || !cfg.sync_mode ? 'var(--primary-color)' : 'var(--divider-color)'};cursor:pointer;background:${cfg.sync_mode === 'integration' || !cfg.sync_mode ? 'rgba(0,200,100,0.06)' : 'var(--secondary-background-color)'}">
+          <input type="radio" name="sync-mode-radio" value="integration" ${cfg.sync_mode === 'integration' || !cfg.sync_mode ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary-color)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${t.edSyncIntegration} <span style="font-size:10px;background:rgba(0,200,100,0.15);color:rgba(0,200,100,0.9);padding:1px 6px;border-radius:10px;font-weight:700;margin-left:4px">${t.edSyncIntRecommended}</span></div>
+            <div style="font-size:11px;color:var(--secondary-text-color);margin-top:2px">${t.edSyncIntDesc}</div>
           </div>
         </label>
       </div>
       ${cfg.sync_mode === 'integration' ? `
       <div style="margin-top:8px;padding:10px 12px;background:rgba(0,200,100,0.07);border:1px solid rgba(0,200,100,0.2);border-radius:8px;font-size:11px;color:var(--secondary-text-color);line-height:1.8;">
-        ✅ <b>Cài đặt một lần:</b><br>
-        1. HACS → Frontend → ⋮ → Custom repositories<br>
-        &nbsp;&nbsp;&nbsp;URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Type: <b>Integration</b><br>
-        2. Tìm <b>HA Smart Room</b> → Install → Restart HA<br>
-        3. Settings → Devices & Services → Add Integration → <b>HA Smart Room</b><br>
-        4. Quay lại card, nhấn Lưu — card tự đăng ký phòng với integration ✨
+        ${t.edSyncIntSetup}<br>
+        1. ${t.edSyncIntStep1}<br>
+        &nbsp;&nbsp;&nbsp;${t.edSyncIntStep1b}<br>
+        2. ${t.edSyncIntStep2}<br>
+        3. ${t.edSyncIntStep3}<br>
+        4. ${t.edSyncIntStep4}
       </div>
       ` : ''}
       ${cfg.sync_mode === 'helpers' ? `
       <div style="margin-top:8px;padding:10px 12px;background:rgba(3,169,244,0.08);border:1px solid rgba(3,169,244,0.2);border-radius:8px;font-size:11px;color:var(--secondary-text-color);line-height:1.7;">
-        ⚠️ Cần tạo 2 Helpers trong HA trước khi dùng.
+        ${t.edSyncHelpersWarn}
       </div>
       <div style="margin-top:10px;">
-        ${this._entityField('helper_bool', '🔘 input_boolean entity', 'input_boolean')}
-        ${this._entityField('helper_num',  '🔢 input_number entity',  'input_number')}
+        ${this._entityField('helper_bool', t.edHelperBool, 'input_boolean')}
+        ${this._entityField('helper_num',  t.edHelperNum,  'input_number')}
       </div>` : ''}
-      <div class="sec-title">⏱️ Thời gian đếm ngược</div>
+      <div class="sec-title">${t.edDelayTitle}</div>
       <div class="row">
-        <label>Tắt sau bao nhiêu phút không có người</label>
+        <label>${t.edDelayLabel}</label>
         <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
           <input type="number" id="inp-auto-delay" min="1" max="120" step="1"
             value="${cfg.auto_delay_min || 5}"
             style="width:80px;padding:7px 10px;border:1px solid var(--divider-color);border-radius:7px;font-size:14px;font-weight:700;color:var(--primary-text-color);background:var(--secondary-background-color);font-family:inherit;">
-          <span style="font-size:13px;color:var(--secondary-text-color);">phút</span>
+          <span style="font-size:13px;color:var(--secondary-text-color);">${t.edDelayUnit}</span>
         </div>
       </div>
-      <div class="sec-title">🔌 Thiết bị sẽ tắt tự động</div>
-      <div style="font-size:11px;color:var(--secondary-text-color);margin-bottom:10px;">Bỏ chọn thiết bị bạn KHÔNG muốn tắt tự động</div>
+      <div class="sec-title">${t.edAutoDevTitle}</div>
+      <div style="font-size:11px;color:var(--secondary-text-color);margin-bottom:10px;">${t.edAutoDevDesc}</div>
       ${(() => {
         // Loại trừ các thiết bị không hỗ trợ turn_off qua auto
         const excludeTypes = ['tv', 'sensor'];
@@ -6210,14 +7330,14 @@ class HASmartRoomCardEditor extends HTMLElement {
       <span class="acc-arrow" id="arrow-colors">${this._open.colors?'▾':'▸'}</span>
     </div>
     <div class="acc-body" id="body-colors" style="display:${this._open.colors?'block':'none'}">
-      <div class="sec-title">🌡 Cảm biến & Header</div>
-      ${this._colorRow('color_temp',  '🌡 Màu nhiệt độ')}
-      ${this._colorRow('color_humi',  '💧 Màu độ ẩm')}
-      ${this._colorRow('color_score', '⭐ Màu điểm phòng')}
-      <div class="sec-title">💡 Thiết bị</div>
-      ${this._colorRow('color_den',   '💡 Đèn chính (bật)')}
-      ${this._colorRow('color_rgb',   '🌈 Đèn RGB (bật)')}
-      ${this._colorRow('color_quat',  '🌀 Quạt (bật)')}
+      <div class="sec-title">${t.colorSensorHdr}</div>
+      ${this._colorRow('color_temp',  t.colorTemp)}
+      ${this._colorRow('color_humi',  t.colorHumi)}
+      ${this._colorRow('color_score', t.colorScore)}
+      <div class="sec-title">${t.colorDevHdr}</div>
+      ${this._colorRow('color_den',   t.colorDen)}
+      ${this._colorRow('color_rgb',   t.colorRgb)}
+      ${this._colorRow('color_quat',  t.colorQuat)}
       <button class="reset-btn" id="btn-reset-colors">${t.edColorsReset}</button>
     </div>
   </div>
@@ -6244,16 +7364,19 @@ class HASmartRoomCardEditor extends HTMLElement {
         this._fire(); this._render();
       }));
 
-    // Room title input
+    // Room title input — dùng 'change' thay vì 'input' để tránh re-render khi đang gõ
+    // HA gọi setConfig → _render() sau mỗi _fire() làm mất focus input
     const inpRoomTitle = sr.getElementById('inp-room-title');
     if (inpRoomTitle) {
-      inpRoomTitle.addEventListener('input', () => {
+      const _commitRoomTitle = () => {
         const val = inpRoomTitle.value.trim();
         const c = { ...this._config };
         if (val) c.room_title = val; else delete c.room_title;
         this._config = c;
         this._fire();
-      });
+      };
+      inpRoomTitle.addEventListener('change', _commitRoomTitle);
+      inpRoomTitle.addEventListener('blur',   _commitRoomTitle);
     }
 
     // BG preset tiles
@@ -6694,3 +7817,12 @@ window.customCards.push({
   preview: true,
   documentationURL: 'https://www.tiktok.com/@long.1412',
 });
+console.groupCollapsed(
+  '%c HA Smart Room Card %c v1.1.0 %c ready! 🚀',
+  'background:#1a1a2e;color:#00ebff;font-weight:700;padding:2px 6px;border-radius:4px 0 0 4px;font-size:12px;',
+  'background:#00c864;color:#fff;font-weight:700;padding:2px 6px;border-radius:0 4px 4px 0;font-size:12px;',
+  'color:#aaa;font-size:11px;font-weight:400;'
+);
+console.log('%c By @doanlong1412 🇻🇳', 'color:#00ebff;font-weight:600;');
+console.log('%c https://github.com/doanlong1412/ha-smart-room-card', 'color:#888;font-size:11px;');
+console.groupEnd();
