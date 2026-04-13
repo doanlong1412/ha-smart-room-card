@@ -1111,11 +1111,18 @@ class HASmartRoomCard extends HTMLElement {
   // Room ID cho integration (dùng cardId đã slugified)
   get _roomId() { return this._cardId || 'hsrc_default'; }
 
-  // Entity IDs expose bởi integration
-  _intAutoSwitchId()   { return `switch.${this._roomId}_ha_smart_room_auto`; }
-  _intDelaySwitchId()  { return `number.${this._roomId}_ha_smart_room_delay`; }
-  _intStatusId()       { return `sensor.${this._roomId}_ha_smart_room_status`; }
-  _intCountdownId()    { return `sensor.${this._roomId}_ha_smart_room_countdown`; }
+  // Entity IDs exposed by the integration.
+  // HA generates entity_id from the entity *name* (not unique_id).
+  // Python sets name = "{room_title} Auto Off" etc., then HA slugifies it.
+  // We slugify the room_title the same way to reconstruct the correct entity_id.
+  _intSlug() {
+    const title = (this._config && (this._config.room_title || this._config.title)) || 'smart room';
+    return title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  }
+  _intAutoSwitchId()   { return `switch.${this._intSlug()}_auto_off`; }
+  _intDelayNumberId()  { return `number.${this._intSlug()}_auto_off_delay`; }
+  _intStatusId()       { return `sensor.${this._intSlug()}_status`; }
+  _intCountdownId()    { return `sensor.${this._intSlug()}_countdown`; }
 
   // Đọc auto mode từ integration entity
   _readAutoModeFromIntegration() {
@@ -2823,10 +2830,7 @@ class HASmartRoomCard extends HTMLElement {
 
     // Brightness slider — den
     this._bindSlider('den', pct => this._setBrightness(E.den, pct));
-    // Brightness slider — decor & hien (chỉ active khi là light entity)
-    this._bindSlider('decor', pct => { if ((E.decor||'').startsWith('light.')) this._setBrightness(E.decor, pct); });
-    this._bindSlider('hien',  pct => { if ((E.hien||'').startsWith('light.'))  this._setBrightness(E.hien, pct); });
-    // Brightness slider — decor & hien (chỉ active khi là light entity)
+    // Brightness slider — decor & hien (only active when entity is a light)
     this._bindSlider('decor', pct => { if ((E.decor||'').startsWith('light.')) this._setBrightness(E.decor, pct); });
     this._bindSlider('hien',  pct => { if ((E.hien||'').startsWith('light.'))  this._setBrightness(E.hien, pct); });
 
@@ -6071,7 +6075,6 @@ class HASmartRoomCardEditor extends HTMLElement {
       <span class="acc-arrow" id="arrow-automation">${this._open.automation?'▾':'▸'}</span>
     </div>
     <div class="acc-body" id="body-automation" style="display:${this._open.automation?'block':'none'}">
-      <div class="sec-title">🔄 Chế độ đồng bộ</div>
       <div class="sec-title" style="margin-bottom:6px">🔄 Chế độ đồng bộ</div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px;">
         <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:9px;border:1.5px solid ${cfg.sync_mode === 'integration' || !cfg.sync_mode || cfg.sync_mode === 'local' ? (cfg.sync_mode !== 'helpers' && cfg.sync_mode !== 'integration' ? 'var(--primary-color)' : 'var(--divider-color)') : 'var(--divider-color)'};cursor:pointer;background:var(--secondary-background-color)">
