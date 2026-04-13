@@ -2772,10 +2772,17 @@ class HASmartRoomCard extends HTMLElement {
         if (!this._dragging || this._dragId !== id) this._setSliderById(id, pct, 'y');
         if (sb) sb.textContent = on ? 'ON' : 'OFF';
       } else if (d.type === 'rgb') {
-        const eff = (state && state.attributes.effect) || this._ct.rbEffectColor;
-        if (sb) sb.textContent = on ? eff : 'OFF';
+        const eff = (state && state.attributes.effect) || this._ct.rgbBtnLabel;
+        if (sb) { sb.style.display = 'none'; }
         const bot = this.shadowRoot.getElementById('rgb-bot-' + id);
         if (bot) { bot.style.opacity = on ? '1' : '0.3'; bot.style.pointerEvents = on ? 'auto' : 'none'; }
+        // Update extra rgb-btn text & state
+        const extraRgbBtn = this.shadowRoot.querySelector(`.extra-rgb-btn[data-rgb-id="${id}"]`);
+        if (extraRgbBtn) {
+          const span = extraRgbBtn.querySelector('.rgb-btn-text');
+          if (span) span.textContent = on ? eff : this._ct.rgbBtnLabel;
+          extraRgbBtn.classList.toggle('rgb-on', on);
+        }
       } else if (d.type === 'quat') {
         const fanSvg = this.shadowRoot.getElementById('fan-svg-' + id);
         if (fanSvg) {
@@ -2784,16 +2791,10 @@ class HASmartRoomCard extends HTMLElement {
           fanSvg.style.color = on ? 'rgba(0,225,255,0.95)' : 'rgba(180,180,180,0.45)';
         }
         const spdBtn = this.shadowRoot.getElementById('spd-open-btn-' + id);
-        if (spdBtn) { spdBtn.style.opacity = on ? '1' : '0.35'; spdBtn.style.pointerEvents = on ? 'auto' : 'none'; }
+        if (spdBtn) { spdBtn.style.opacity = on ? '1' : '0.35'; spdBtn.style.pointerEvents = on ? 'auto' : 'none'; spdBtn.classList.toggle('fan-on', on); }
         if (sb) sb.textContent = on ? this._ct.fanRunning : 'OFF';
       } else if (d.type === 'tv') {
         if (sb) sb.textContent = on ? 'Playing' : 'OFF';
-        // Volume slider
-        const vol = (state && state.attributes.volume_level != null)
-          ? Math.round(state.attributes.volume_level * 100) : (on ? 50 : 0);
-        if (!this._dragging || this._dragId !== id) this._setSliderById(id, vol, 'c');
-        const vlEl = this.shadowRoot.getElementById('vl-' + id);
-        if (vlEl) vlEl.textContent = on ? vol + '%' : '--%';
       } else if (d.type === 'ocam') {
         // Cập nhật power sensor cho extra ocam card
         const pwrKey = d.id + '_power_entity';
@@ -2882,13 +2883,17 @@ class HASmartRoomCard extends HTMLElement {
 
     } else if (id === 'rgb') {
       if (ba) { ba.className = 'on-badge ' + (on ? 'ba-r' : 'ba-off'); ba.textContent = on ? 'ON' : 'OFF'; }
-      if (sb) {
-        sb.className = 'c-sub ' + (on ? 'sub-r' : 'sub-off');
-        const eff = this._attr('rgb','effect') || this._ct.rbEffectColor;
-        sb.textContent = on ? eff : 'OFF';
-      }
+      if (sb) { sb.style.display = 'none'; }
       const bot = $('rgb-bot');
       if (bot) { bot.style.opacity = on ? '1' : '0.3'; bot.style.pointerEvents = on ? 'auto' : 'none'; }
+      // Update rgb-btn text & state
+      const rgbBtnEl = this.shadowRoot.querySelector('.rgb-btn:not(.extra-rgb-btn)');
+      if (rgbBtnEl) {
+        const eff2 = this._attr('rgb','effect') || this._ct.rgbBtnLabel;
+        const span = rgbBtnEl.querySelector('.rgb-btn-text');
+        if (span) span.textContent = on ? eff2 : this._ct.rgbBtnLabel;
+        rgbBtnEl.classList.toggle('rgb-on', on);
+      }
 
     } else if (id === 'hien') {
       if (ba) { ba.className = 'on-badge ' + (on ? 'ba-or' : 'ba-off'); ba.textContent = on ? 'ON' : 'OFF'; }
@@ -2930,6 +2935,7 @@ class HASmartRoomCard extends HTMLElement {
       if (spdBtn) {
         spdBtn.style.opacity = on ? '1' : '0.35';
         spdBtn.style.pointerEvents = on ? 'auto' : 'none';
+        spdBtn.classList.toggle('fan-on', on);
       }
       this.shadowRoot.querySelectorAll('.spd-btn').forEach(b => {
         b.style.opacity = on ? '1' : '0.3';
@@ -2946,7 +2952,6 @@ class HASmartRoomCard extends HTMLElement {
     } else if (id === 'tv') {
       if (ba) { ba.className = 'on-badge ' + (on ? 'ba-b' : 'ba-off'); ba.textContent = on ? 'ON' : 'OFF'; }
       if (sb) { sb.className = 'c-sub ' + (on ? 'sub-b' : 'sub-off'); sb.textContent = on ? 'Playing' : 'OFF'; }
-      if (!this._dragging || this._dragId !== 'tv') this._setSlider('tv', on ? 60 : 0);
       const tvRing = $('ir-tv');
       if (tvRing) {
         const content = tvRing.querySelector('.tv-content');
@@ -3611,6 +3616,23 @@ class HASmartRoomCard extends HTMLElement {
     this._rgbEffect = el.dataset.ef;
     const sub = this.shadowRoot.getElementById('sb-rgb');
     if (sub) sub.textContent = el.dataset.ef === 'None' ? this._ct.rbEffectColor : el.dataset.ef;
+    // Update rgb-btn text (truncated span)
+    const activeId = this._activeRgbId;
+    if (activeId) {
+      const extraBtn = this.shadowRoot.querySelector(`.extra-rgb-btn[data-rgb-id="${activeId}"]`);
+      if (extraBtn) {
+        const span = extraBtn.querySelector('.rgb-btn-text');
+        const label = el.dataset.ef === 'None' ? this._ct.rgbBtnLabel : el.dataset.ef;
+        if (span) span.textContent = label;
+      }
+    } else {
+      const mainBtn = this.shadowRoot.querySelector('.rgb-btn:not(.extra-rgb-btn)');
+      if (mainBtn) {
+        const span = mainBtn.querySelector('.rgb-btn-text');
+        const label = el.dataset.ef === 'None' ? this._ct.rgbBtnLabel : el.dataset.ef;
+        if (span) span.textContent = label;
+      }
+    }
     const E = this.ENTITIES;
     const rgbEid2 = (this._activeRgbId && E[this._activeRgbId]) ? E[this._activeRgbId] : E.rgb;
     if (rgbEid2 && el.dataset.ef !== 'None') {
@@ -3816,28 +3838,7 @@ class HASmartRoomCard extends HTMLElement {
     }
     ctx.restore();
 
-    // ── Danger zones ─────────────────────────────────────────────────────────
-    // 30°C threshold line
-    const dangerTempY = normT(30);
-    if (dangerTempY >= 0 && dangerTempY <= H) {
-      ctx.save();
-      // Red danger band above 30°C
-      const redBand = ctx.createLinearGradient(0, 0, 0, dangerTempY);
-      redBand.addColorStop(0,   'rgba(255,60,60,0.14)');
-      redBand.addColorStop(1,   'rgba(255,60,60,0.02)');
-      ctx.fillStyle = redBand;
-      ctx.fillRect(0, 0, W, dangerTempY);
-      // Dashed threshold line
-      ctx.setLineDash([4, 5]);
-      ctx.beginPath(); ctx.moveTo(0, dangerTempY); ctx.lineTo(W, dangerTempY);
-      ctx.strokeStyle = 'rgba(255,80,80,0.4)'; ctx.lineWidth = 1; ctx.stroke();
-      ctx.setLineDash([]);
-      // Label
-      ctx.font = '600 9px system-ui';
-      ctx.fillStyle = 'rgba(255,100,100,0.65)';
-      ctx.fillText('30°C ⚠', 4, dangerTempY - 3);
-      ctx.restore();
-    }
+
 
     // ── Catmull-Rom path builder ──────────────────────────────────────────────
     const buildPath = (ys) => {
@@ -3859,7 +3860,7 @@ class HASmartRoomCard extends HTMLElement {
     };
 
     // ── Multi-streak hologram draw (như ảnh: vệt sáng chính + nhiều vệt mờ dần xuống) ──
-    const drawHolo = (ys, stroke, glowColor, dangerThresholdY) => {
+    const drawHolo = (ys, stroke, glowColor) => {
       // Trích màu RGB từ chuỗi rgba
       const rgbMatch = stroke.match(/rgba\((\d+),(\d+),(\d+)/);
       const [r, g, b] = rgbMatch ? [+rgbMatch[1], +rgbMatch[2], +rgbMatch[3]] : [255,255,255];
@@ -3907,16 +3908,9 @@ class HASmartRoomCard extends HTMLElement {
       ctx.save(); buildPath(ys);
       ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
       const fg = ctx.createLinearGradient(0, 0, 0, H);
-      if (dangerThresholdY !== null && dangerThresholdY > 0 && dangerThresholdY < H) {
-        fg.addColorStop(0,                        'rgba(255,80,60,0.18)');
-        fg.addColorStop(dangerThresholdY/H * 0.6, `rgba(${r},${g},${b},0.14)`);
-        fg.addColorStop(dangerThresholdY/H,       `rgba(${r},${g},${b},0.06)`);
-        fg.addColorStop(1,                        `rgba(${r},${g},${b},0)`);
-      } else {
-        fg.addColorStop(0,   `rgba(${r},${g},${b},0.18)`);
-        fg.addColorStop(0.5, `rgba(${r},${g},${b},0.06)`);
-        fg.addColorStop(1,   `rgba(${r},${g},${b},0)`);
-      }
+      fg.addColorStop(0,   `rgba(${r},${g},${b},0.18)`);
+      fg.addColorStop(0.5, `rgba(${r},${g},${b},0.06)`);
+      fg.addColorStop(1,   `rgba(${r},${g},${b},0)`);
       ctx.fillStyle = fg; ctx.fill(); ctx.restore();
 
       // ── Glow ngoài rộng (hào quang) ─────────────────────────────────────────
@@ -3949,7 +3943,7 @@ class HASmartRoomCard extends HTMLElement {
     };
 
     drawHolo(py, 'rgba(0,240,180,1)',  'rgba(0,240,180,1)',  null);
-    drawHolo(ty, 'rgba(255,200,50,1)', 'rgba(255,200,50,1)', dangerTempY);
+    drawHolo(ty, 'rgba(255,200,50,1)', 'rgba(255,200,50,1)', null);
 
     // ── Bottom-up fade overlay to blend canvas into card background ──────────
     // Đọc màu nền trực tiếp từ config (không dùng CSS vars vì shadow DOM không đọc được)
@@ -4461,8 +4455,8 @@ class HASmartRoomCard extends HTMLElement {
         <div class="bot-h" id="rgb-bot-${id}">
           <div class="c-name" id="cn-${id}">${label}</div>
           <div class="c-sub sub-off" id="sb-${id}">OFF</div>
-          <div class="rainbow-bar" style="margin-top:2px"></div>
-          <div class="rgb-btn extra-rgb-btn" data-rgb-id="${id}" style="margin-top:5px">Effect &amp; Color</div>
+          <div class="rainbow-bar" style="margin-top:1px"></div>
+          <div class="rgb-btn extra-rgb-btn" data-rgb-id="${id}" style="margin-top:2px"><span class="rgb-btn-text">Effect &amp; Color</span></div>
         </div>
       </div>`;
     }
@@ -4717,8 +4711,8 @@ class HASmartRoomCard extends HTMLElement {
         <div class="bot-h" id="rgb-bot">
           <div class="c-name">Đèn RGB</div>
           <div class="c-sub sub-r" id="sb-rgb">--</div>
-          <div class="rainbow-bar" style="margin-top:2px"></div>
-          <div class="rgb-btn" style="margin-top:5px">${this._ct.rgbBtnLabel}</div>
+          <div class="rainbow-bar" style="margin-top:1px"></div>
+          <div class="rgb-btn" style="margin-top:2px"><span class="rgb-btn-text">${this._ct.rgbBtnLabel}</span></div>
         </div>
       </div>`;
   }
@@ -4824,11 +4818,7 @@ class HASmartRoomCard extends HTMLElement {
         </div>
         <div class="bot-h">
           <div class="c-name">Smart TV</div>
-          <div class="sl-lbl" style="margin-top:2px"><span>${t.tvVolLabel}</span><span id="vl-tv">--%</span></div>
-          <div class="track" id="tr-tv">
-            <div class="fill-c" id="fl-tv" style="width:0%"></div>
-            <div class="thumb" id="th-tv" style="left:0%"></div>
-          </div>
+          <div class="c-sub sub-off" id="sb-tv">OFF</div>
           <button class="tv-remote-btn" id="tv-remote-btn">${t.tvControlBtn}</button>
         </div>
       </div>
@@ -5361,10 +5351,10 @@ canvas#mg{
 
 /* ── Card top ── */
 .top-h{
-  padding:10px 9px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  padding:8px 9px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   position:relative;border-bottom:1px solid rgba(255,255,255,0.07);
   transition:background 0.3s,opacity 0.15s;cursor:pointer;border-radius:16px 16px 0 0;
-  min-height:72px
+  min-height:62px
 }
 .top-h:active{filter:brightness(0.88)}
 .top-h.bg-y{background:radial-gradient(ellipse at 25% 0%,rgba(255,210,60,0.22) 0%,transparent 65%)}
@@ -5377,7 +5367,7 @@ canvas#mg{
 
 /* ── Icon ring: glass + depth ── */
 .i-ring{
-  width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;
   border:1px solid rgba(255,255,255,0.12);
   background:linear-gradient(145deg,rgba(255,255,255,0.14) 0%,rgba(255,255,255,0.04) 100%);
   box-shadow:0 4px 0 rgba(0,0,0,0.35),0 5px 12px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.22);
@@ -5423,8 +5413,8 @@ canvas#mg{
 .ba-off{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.1)}
 
 /* Card bottom */
-.bot-h{padding:6px 8px 10px;display:flex;flex-direction:column;gap:4px;border-radius:0 0 16px 16px;align-items:center}
-.c-sub{font-weight:600;min-height:14px;font-size:11px;text-align:center;width:100%}
+.bot-h{padding:6px 7px 8px;display:flex;flex-direction:column;gap:0;border-radius:0 0 16px 16px;align-items:center;height:60px;justify-content:space-between;overflow:hidden;box-sizing:border-box}
+.c-sub{font-weight:600;min-height:12px;font-size:10px;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none;}
 .sub-off{color:rgba(255,255,255,0.25)}
 .sub-y{color:rgba(255,215,60,0.95)}.sub-c{color:rgba(0,225,255,0.95)}.sub-r{color:rgba(205,135,255,0.95)}
 .sub-b{color:rgba(110,180,255,0.95)}.sub-gr{color:rgba(80,245,145,0.95)}.sub-pu{color:rgba(195,115,255,0.95)}
@@ -5439,19 +5429,26 @@ canvas#mg{
 .thumb{width:11px;height:11px;border-radius:50%;background:white;position:absolute;top:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 1px 6px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.5)}
 /* Speed open button */
 .spd-open-btn{
-  width:100%;padding:4px 8px;border-radius:8px;font-size:10px;font-weight:800;
-  background:linear-gradient(160deg,rgba(0,200,255,0.12) 0%,rgba(0,150,255,0.06) 100%);
-  border:1px solid rgba(0,200,255,0.3);color:rgba(0,230,255,0.9);
+  width:100%;padding:3px 6px;border-radius:20px;font-size:10px;font-weight:600;
+  background:rgba(255,255,255,0.08);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.14);
+  color:rgba(255,255,255,0.82);
   cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;
-  box-shadow:0 3px 0 rgba(0,120,180,0.5),0 4px 10px rgba(0,180,255,0.15),inset 0 1px 0 rgba(255,255,255,0.12);
-  transition:all 0.1s;margin-top:2px;
-  transform:perspective(300px) rotateX(0deg) translateY(0px)
+  box-shadow:0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 8px rgba(0,0,0,0.25);
+  transition:all 0.2s;margin-top:1px;
+  white-space:nowrap;overflow:hidden;box-sizing:border-box;
+}
+.spd-open-btn.fan-on{
+  border-color:rgba(0,200,255,0.4);
+  box-shadow:0 0 8px rgba(0,180,255,0.2),0 1px 0 rgba(255,255,255,0.1) inset, 0 2px 8px rgba(0,0,0,0.2);
+  color:rgba(160,235,255,0.95);
+  background:rgba(0,180,255,0.1);
 }
 .spd-open-btn:active{
-  transform:perspective(300px) rotateX(6deg) translateY(3px);
-  box-shadow:0 0px 0 rgba(0,120,180,0.5),0 1px 5px rgba(0,180,255,0.1),inset 0 2px 3px rgba(0,0,0,0.2);
+  opacity:0.7;
 }
-.spd-open-val{color:rgba(0,255,255,1);font-size:11px}
+.spd-open-val{color:rgba(255,255,255,0.9);font-size:10px;font-weight:700}
 /* Speed popup overlay */
 .spd-popup-overlay{
   position:fixed;top:0;left:0;right:0;bottom:0;z-index:9998;
@@ -5502,13 +5499,30 @@ canvas#mg{
 .m-stat{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.04);border-radius:6px;padding:4px 7px;border:1px solid rgba(255,255,255,0.06)}
 .m-stat-lbl{font-size:7px;color:rgba(255,255,255,0.28);font-weight:700;letter-spacing:0.3px}
 .m-stat-val{font-size:8px;font-weight:700}
-.rainbow-bar{height:4px;border-radius:2px;background:linear-gradient(90deg,#ff4444,#ff9900,#ffee00,#44ff88,#00ccff,#4488ff,#cc44ff,#ff44aa);box-shadow:0 1px 6px rgba(180,100,255,0.3)}
+.rainbow-bar{height:3px;border-radius:2px;background:linear-gradient(90deg,#ff4444,#ff9900,#ffee00,#44ff88,#00ccff,#4488ff,#cc44ff,#ff44aa);opacity:0.7}
 .rgb-btn{
-  width:100%;padding:4px 0;border-radius:6px;
-  background:linear-gradient(135deg,rgba(180,80,255,0.18) 0%,rgba(120,40,220,0.1) 100%);
-  border:1px solid rgba(180,80,255,0.35);color:rgba(205,135,255,0.95);
-  font-size:10px;font-weight:700;cursor:pointer;text-align:center;
-  box-shadow:0 2px 8px rgba(160,60,255,0.15),inset 0 1px 0 rgba(220,160,255,0.15)
+  width:100%;padding:3px 6px;border-radius:20px;
+  background:rgba(255,255,255,0.08);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.14);
+  color:rgba(255,255,255,0.82);
+  font-size:10px;font-weight:600;cursor:pointer;text-align:center;
+  box-shadow:0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 8px rgba(0,0,0,0.25);
+  transition:all 0.2s;
+  display:block;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+.rgb-btn .rgb-btn-text{
+  display:block;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  width:100%;
+}
+.rgb-btn.rgb-on{
+  border-color:rgba(200,130,255,0.45);
+  box-shadow:0 0 8px rgba(180,80,255,0.25),0 1px 0 rgba(255,255,255,0.1) inset, 0 2px 8px rgba(0,0,0,0.2);
+  color:rgba(220,170,255,0.95);
+  background:rgba(180,80,255,0.12);
 }
 
 /* ── Animations ── */
@@ -5777,7 +5791,7 @@ customElements.define('ha-smart-room-card', HASmartRoomCard);
 
 // ═══════════════════════════════════════════════════════════════
 //  VISUAL EDITOR — HA Smart Room Card
-//  v1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam
+//  v1.1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam
 // ═══════════════════════════════════════════════════════════════
 
 // ─── i18n ─────────────────────────────────────────────────────
@@ -7085,7 +7099,7 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── Credit ── -->
   <div class="credit">
     🏠 <strong>HA Smart Room Card</strong>
-    <span class="credit-ver">v1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
+    <span class="credit-ver">v1.1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
   </div>
 
   <!-- ── TikTok link ── -->
@@ -7818,7 +7832,7 @@ window.customCards.push({
   documentationURL: 'https://www.tiktok.com/@long.1412',
 });
 console.groupCollapsed(
-  '%c HA Smart Room Card %c v1.1.0 %c ready! 🚀',
+  '%c HA Smart Room Card %c v1.1.1 %c ready! 🚀',
   'background:#1a1a2e;color:#00ebff;font-weight:700;padding:2px 6px;border-radius:4px 0 0 4px;font-size:12px;',
   'background:#00c864;color:#fff;font-weight:700;padding:2px 6px;border-radius:0 4px 4px 0;font-size:12px;',
   'color:#aaa;font-size:11px;font-weight:400;'
