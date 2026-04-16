@@ -1400,6 +1400,111 @@ class HASmartRoomCard extends HTMLElement {
         delDevTitle: 'Remover dispositivo',
         rgbBtnLabel: 'Efeito & Cor',
       },
+      sl: {
+        tempLabel: 'Temperatura', humiLabel: 'Vlažnost',
+        doorOpen: 'Odprto', doorClosed: 'Zaprto',
+        motionYes: 'Zaznano gibanje', motionNo: 'Ni nikogar',
+        btnManual: 'Ročno', btnAuto: 'Samodejno',
+        modeManual: 'Deluje v <b style="color:rgba(0,235,255,1)">ročnem načinu</b>',
+        modeAutoOptimal: 'Sistem deluje optimalno — ni predlogov',
+        motionPresent: 'Oseba v prostoru — naprave ostanejo nespremenjene',
+        motionCold: 'Temperatura', motionColdSuffix: '°C — klima bo zmanjšala moč',
+        noDevice: 'Nobena naprava ni vklopljena',
+        autoDone: 'Samodejno izklopljeno — soba prazna več kot {min} min',
+        autoTimer: 'Izklop čez',
+        chipDen: 'Glavna luč', chipDecor: 'Dekor', chipHien: 'Luč na terasi',
+        chipRgb: 'RGB', chipQuat: 'Ventilator', chipOcam: 'Vtičnica', chipAc: 'Klima',
+        envHotRoom: 'V sobi je za <b>{d}°C</b> topleje kot zunaj — priporočen vklop klime',
+        envWarmRoom: 'Temperatura v sobi je za <b>{d}°C</b> višja kot zunaj',
+        envCoolOut: 'Zunaj je za <b>{d}°C</b> topleje — zaprite okna za ohranjanje hladu',
+        envWarmOut: 'Zunaj je za <b>{d}°C</b> topleje kot v sobi',
+        envBalance: 'Temp. znotraj/zunaj izravnana: notri <b>{ti}°C</b> · zunaj <b>{to}°C</b>',
+        envHumiHigh: 'Vlaga v sobi je za <b>{d}%</b> višja — vklopite prezračevanje',
+        envHumiMid: 'Vlaga v sobi je za <b>{d}%</b> višja — nekoliko zatohlo',
+        envHumiOut: 'Zunaj je za <b>{d}%</b> bolj vlažno — odprite okna za svež zrak',
+        envHumiBalance: 'Vlaga znotraj/zunaj podobna: <b>{hi}%</b> / <b>{ho}%</b>',
+        envTempIn: 'Temperatura v prostoru: <b>{t}°C</b>',
+        envHumiIn: 'Vlažnost v prostoru: <b>{h}%</b>',
+        envLoading: 'Posodabljanje podatkov senzorjev...',
+        envHotRoomHigh: 'V sobi je za <b>{d}°C</b> topleje — takoj vklopite klimo!',
+        envHotRoomMid: 'V sobi je za <b>{d}°C</b> topleje — razmislite o vklopu klime',
+        envHotRoomLow: 'V sobi je za <b>{d}°C</b> topleje, ni velike razlike',
+        envOutHeatwave: 'Zunaj je <b>{t}°C</b> — nevarnost toplotnega šoka, <b>pijte vodo in nosite pokrivalo</b>!',
+        envOutHot: 'Zunaj je <b>{t}°C</b>, zelo vroče — ne pozabite na <b>zaščito pred soncem</b>',
+        envOutWarmClose: 'Zunaj je za <b>{d}°C</b> topleje — zaprite okna za ohranjanje hladu',
+        envOutWarm: 'Zunaj je za <b>{d}°C</b> topleje kot v sobi',
+        envBalanced: 'Temperatura znotraj/zunaj skoraj enaka: <b>{ti}°C</b> / <b>{to}°C</b>',
+        envRainyUmbrella: 'Zunanja vlaga je <b>{h}%</b> — verjetno dežuje, <b>vzemite dežnik</b>!',
+        envRainyMaybe: 'Zunanja vlaga je <b>{h}%</b> — možen dež, <b>vzemite dežnik</b> za vsak primer',
+        envOutHumidSweat: 'Zunanja vlaga je <b>{h}%</b> — soparno, pripravite <b>robčke za znoj</b>',
+        envInHumiHighClothes: 'V sobi je za <b>{d}%</b> bolj vlažno — <b>pobranite perilo</b>, če se suši zunaj',
+        envInHumiMidVent: 'Znotraj je za <b>{d}%</b> bolj vlažno — prezračite prostor',
+        envInDryHumid: 'Znotraj je precej suho (<b>{h}%</b>) — pijte vodo ali uporabite vlažilnik',
+        envOutHumidClose: 'Zunaj je za <b>{d}%</b> bolj vlažno — zaprite okna za prijeten zrak',
+        envOutHumidLow: 'Zunaj je za <b>{d}%</b> bolj vlažno kot notri',
+        envOutHotHumid: 'Zunaj je vroče in vlažno: <b>{t}°C / {h}%</b> — občutek <b>velike zatohlosti</b>',
+        envOutVeryDry: 'Zunaj je zelo suho (<b>{h}%</b>) — pijte vodo pred odhodom',
+        envDangerHeat: 'Zunaj je <b>{t}°C</b> — visoka nevarnost toplotnega udara, ne hodite ven!',
+        envHotHumidWarn: 'Zunaj je vroče in vlažno <b>{t}°C / {h}%</b> — nosite lahka oblačila',
+        envOutCold: 'Zunaj je hladno <b>{t}°C</b> — oblecite <b>topla oblačila</b>',
+        envOutVeryCold: 'Zunaj je mrzlo <b>{t}°C</b> — toplo se oblecite in vzemite šal!',
+        envInVeryHumid: 'V sobi je zelo vlažno <b>{h}%</b> — vklopite prezračevanje',
+        envInVerydry: 'Zrak v sobi je precej suh <b>{h}%</b> — pijte dovolj vode',
+        hintFan: 'Okna zaprta, visoka temp. — priporočljiv <b>vklop ventilatorja</b>',
+        hintAc: 'Še vedno je vroče (<b>{t}°C</b>) — priporočljiv vklop klime',
+        hintDoorAc: 'Okno odprto + klima vklopljena — potrata energije, <b>zaprite okno</b>',
+        hintOpenDoor: 'Zunaj je za <b>{d}°C</b> hladneje — odprite okna za naravno hlajenje',
+        hintEmptyLight: 'Soba je prazna — luč še gori, <b>ugasnite luč</b>',
+        hintEmptyFan: 'Soba je prazna — ventilator še dela, <b>izklopite ga</b>',
+        hintEmptyAc: 'Ni nikogar — klima deluje po nepotrebnem',
+        hintHumi: 'Vlaga je <b>{h}%</b> — vklopite ventilator za zmanjšanje vlage',
+        hintHotOut: 'Zunaj je za <b>{d}°C</b> topleje — zaprite okna za ohranjanje hladu',
+        hintRgb: 'RGB luč gori v prazni sobi — <b>izklopite za varčevanje</b>',
+        graphTemp: 'Temperatura (°C)', graphPwr: 'Moč (W)', graphNow: 'Trenutno',
+        graphAcOn: '❄️ Klima VKLOP ob', graphAcOff: '❄️ Klima IZKLOP ob',
+        graphDoorOpen: '🚪 Vrata ODPRTA ob', graphDoorClose: '🚪 Vrata ZAPRTA ob', graphDoorChanged: '🚪 Sprememba vrat',
+        graphMotion: '🚶 Zadnje gibanje',
+        tempVeryHot: '🔥 Nevzdržno vroče!', tempHot: 'Vroče, vklopite ventilator',
+        tempWarm: 'Toplo, občutek sopare', tempOk: 'Prijetno in udobno 👌',
+        tempCool: 'Sveže, primerno za delo',
+        tempCold: 'Hladno, oblecite se', tempVeryCold: '🥶 Zelo mrzlo, pazite!',
+        humiStorm: '🌧️ Izjemno visoka vlaga!', humiHigh: 'Zelo visoka vlaga',
+        humiMid: 'Nekoliko vlažno, normalno', humiOk: 'Idealna vlažnost 💧',
+        humiDry: 'Nekoliko suho', humiVeryDry: '🏜️ Zelo suho',
+        scoreLabels: ['Popolno!','Zelo udobno','Prijetno','V redu','Zatohlo','Neprijetno','Zelo zatohlo','Težko dihanje'],
+        scoreReasons: { hot:'vroče', veryHot:'zelo vroče', extremeHot:'izjemno vroče', slightHot:'nekoliko vroče',
+          slightCold:'nekoliko hladno', cold:'hladno', humid:'zatohlo', veryHumid:'zelo vlažno', dry:'suho',
+          noFan:'brez ventilatorja/klime' },
+        tvFanSpeed: '⚡ Hitrost', fanLvl: ['Nežno','Nizko','Srednje','Visoko','Maksimalno'],
+        fanPopupTitle: '⚡ Izberi hitrost ventilatorja',
+        rbEffectColor: 'Barva',
+        rgbModalTitle: '🌈 Učinki in barve',
+        rgbColorLabel: 'BARVA', rgbCustom: 'Po meri:',
+        spTempLine: 'Notri: --°C · Zunaj: --°C',
+        scoring: 'Računanje...',
+        fanRunning: 'Deluje',
+        confirmOn: 'Izklopljeno — potrdi za vklop',
+        confirmOff: 'Vklopljeno — potrdi za izklop',
+        confirmActionOn: 'VKLOP',
+        confirmActionOff: 'IZKLOP',
+        confirmCancel: 'Prekliči',
+        confirmDevFallback: 'vtičnica',
+        trendUp: 'Narašča',
+        trendDown: 'Pada',
+        aspTitle: '⚙️ Nastavitve samodejnega izklopa',
+        aspDelayUnit: 'min',
+        aspDevTitle: '🔌 Naprave za izklop',
+        colorSensorHdr: '🌡 Senzorji in glava',
+        colorDevHdr: '💡 Naprave',
+        colorTemp: '🌡 Barva temperature',
+        colorHumi: '💧 Barva vlage',
+        colorScore: '⭐ Barva ocene prostora',
+        colorDen: '💡 Glavna luč (vklop)',
+        colorRgb: '🌈 RGB luč (vklop)',
+        colorQuat: '🌀 Ventilator (vklop)',
+        delDevTitle: 'Izbriši napravo',
+        rgbBtnLabel: 'Učinki in barve',
+      },
     };
     return T[lang] || T.vi;
   }
@@ -1951,7 +2056,7 @@ class HASmartRoomCard extends HTMLElement {
   _getRootBg() {
     const cfg = this._config || {};
     const preset = cfg.background_preset || 'default';
-    if (!cfg.background_preset && !cfg.bg_alpha) return 'background:linear-gradient(160deg,#0e1f38 0%,#081528 55%,#060f1e 100%);--root-c1:#0e1f38;--root-c2:#060f1e;--root-alpha:1';
+    if (!cfg.background_preset && !cfg.bg_alpha && !cfg.bg_blur) return 'background:linear-gradient(160deg,#0e1f38 0%,#081528 55%,#060f1e 100%);--root-c1:#0e1f38;--root-c2:#060f1e;--root-alpha:1;--root-blur:0px';
     const HSRC_BG = {
       default:   ['#0e1f38','#0a4a7a'], night:   ['#0d0d1a','#1a0a3a'],
       deep_neon: ['#020b18','#00d4ff'], sunset:  ['#1a0a00','#ff6b35'],
@@ -1969,7 +2074,7 @@ class HASmartRoomCard extends HTMLElement {
     } else {
       [c1, c2] = HSRC_BG[preset] || HSRC_BG.default;
     }
-    return `background:linear-gradient(160deg,${c1}${alpha} 0%,${c2}${alpha} 100%);--root-c1:${c1};--root-c2:${c2};--root-alpha:${parseInt(alpha,16)/255}`;
+    return `background:linear-gradient(160deg,${c1}${alpha} 0%,${c2}${alpha} 100%);--root-c1:${c1};--root-c2:${c2};--root-alpha:${parseInt(alpha,16)/255};--root-blur:${cfg.bg_blur !== undefined ? cfg.bg_blur : 0}px`;
   }
 
   // ─── Sync root color CSS vars ─────────────────────────────────────────────
@@ -2001,6 +2106,8 @@ class HASmartRoomCard extends HTMLElement {
     root.style.setProperty('--root-c2-g', g);
     root.style.setProperty('--root-c2-b', b);
     root.style.setProperty('--root-alpha', alpha);
+    const blur = cfg.bg_blur !== undefined ? cfg.bg_blur : 0;
+    root.style.setProperty('--root-blur', blur + 'px');
   }
 
   // ─── Render (first time) ───────────────────────────────────────────────────
@@ -4968,7 +5075,10 @@ const STYLES = `
 .root{
   border-radius:22px;overflow:visible;color:white;width:100%;position:relative;
   border:1px solid rgba(255,255,255,0.09);
-  box-shadow:0 12px 48px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.06)
+  box-shadow:0 12px 48px rgba(0,0,0,0.7),inset 0 1px 0 rgba(255,255,255,0.06);
+  backdrop-filter:blur(var(--root-blur,0px));
+  -webkit-backdrop-filter:blur(var(--root-blur,0px));
+  transition:backdrop-filter 0.3s ease, -webkit-backdrop-filter 0.3s ease;
 }
 
 /* ── Header ── */
@@ -5791,7 +5901,7 @@ customElements.define('ha-smart-room-card', HASmartRoomCard);
 
 // ═══════════════════════════════════════════════════════════════
 //  VISUAL EDITOR — HA Smart Room Card
-//  v1.1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam
+//  v1.2 · Designed by @doanlong1412 from 🇻🇳 Vietnam
 // ═══════════════════════════════════════════════════════════════
 
 // ─── i18n ─────────────────────────────────────────────────────
@@ -5804,7 +5914,7 @@ const HSRC_TRANSLATIONS = {
     edDisplay: '👁 Hiển thị',
     edLang: '🌐 Ngôn ngữ',
     bgPresets: 'Preset',
-    edBgAlpha: '🔆 Độ trong suốt', edBgTransparent: 'Trong suốt', edBgSolid: 'Đặc',
+    edBgAlpha: '🔆 Độ trong suốt', edBgBlur: '💎 Hiệu ứng Glass Blur', edBgBlurNone: 'Không', edBgBlurMax: 'Tối đa', edBgTransparent: 'Trong suốt', edBgSolid: 'Đặc',
     color1: 'Màu 1 (trên)', color2: 'Màu 2 (dưới)',
     edTemp: '🌡 Cảm biến nhiệt độ (sensor.*)',
     edHumi: '💧 Cảm biến độ ẩm (sensor.*)',
@@ -5882,6 +5992,22 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Quay lại',
     tvInput: 'Nguồn vào',
     tvVolLabel: 'ÂM LƯỢNG',
+    devDen: '💡 Đèn Chính',
+    devDecor: '✨ Đèn Decor',
+    devHien: '🏮 Đèn Hiên',
+    devRgb: '🌈 Đèn RGB',
+    devQuat: '🌀 Quạt Trần',
+    devOcam: '🔌 Ổ Cắm',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Remote',
+    devAc: '❄️ Điều Hòa',
+    devNamePlaceholder: 'Tên thiết bị (vd: Đèn phòng ngủ)',
+    devLabelLight: '💡 Đèn',
+    devLabelRgb: '🌈 Đèn RGB',
+    devLabelFan: '🌀 Quạt',
+    devLabelOutlet: '🔌 Ổ cắm',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Cảm biến',
   },
   en: {
     lang: 'English', flag: 'gb',
@@ -5891,7 +6017,7 @@ const HSRC_TRANSLATIONS = {
     edDisplay: '👁 Display options',
     edLang: '🌐 Language',
     bgPresets: 'Preset',
-    edBgAlpha: '🔆 Opacity', edBgTransparent: 'Transparent', edBgSolid: 'Solid',
+    edBgAlpha: '🔆 Opacity', edBgBlur: '💎 Glass Blur Effect', edBgBlurNone: 'None', edBgBlurMax: 'Max', edBgTransparent: 'Transparent', edBgSolid: 'Solid',
     color1: 'Color 1 (top)', color2: 'Color 2 (bottom)',
     edTemp: '🌡 Temperature sensor (sensor.*)',
     edHumi: '💧 Humidity sensor (sensor.*)',
@@ -5969,6 +6095,22 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Back',
     tvInput: 'Input',
     tvVolLabel: 'VOLUME',
+    devDen: '💡 Main Light',
+    devDecor: '✨ Decor Light',
+    devHien: '🏮 Porch Light',
+    devRgb: '🌈 RGB Light',
+    devQuat: '🌀 Ceiling Fan',
+    devOcam: '🔌 Power Outlet',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Remote',
+    devAc: '❄️ Air Conditioner',
+    devNamePlaceholder: 'Device name (e.g. Bedroom light)',
+    devLabelLight: '💡 Light',
+    devLabelRgb: '🌈 RGB Light',
+    devLabelFan: '🌀 Fan',
+    devLabelOutlet: '🔌 Outlet',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensor',
   },
   de: {
     lang: 'Deutsch', flag: 'de',
@@ -5978,7 +6120,7 @@ const HSRC_TRANSLATIONS = {
     edDisplay: '👁 Anzeigeoptionen',
     edLang: '🌐 Sprache',
     bgPresets: 'Voreinstellung',
-    edBgAlpha: '🔆 Transparenz', edBgTransparent: 'Transparent', edBgSolid: 'Deckend',
+    edBgAlpha: '🔆 Transparenz', edBgBlur: '💎 Glas Blur Effekt', edBgBlurNone: 'Kein', edBgBlurMax: 'Max', edBgTransparent: 'Transparent', edBgSolid: 'Deckend',
     color1: 'Farbe 1 (oben)', color2: 'Farbe 2 (unten)',
     edTemp: '🌡 Temperatursensor (sensor.*)',
     edHumi: '💧 Feuchtigkeitssensor (sensor.*)',
@@ -6056,6 +6198,22 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Zurück',
     tvInput: 'Eingang',
     tvVolLabel: 'LAUTSTÄRKE',
+    devDen: '💡 Hauptlicht',
+    devDecor: '✨ Dekolicht',
+    devHien: '🏮 Außenlicht',
+    devRgb: '🌈 RGB-Licht',
+    devQuat: '🌀 Deckenventilaror',
+    devOcam: '🔌 Steckdose',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Fernbedienung',
+    devAc: '❄️ Klimaanlage',
+    devNamePlaceholder: 'Gerätename (z.B. Schlafzimmerlicht)',
+    devLabelLight: '💡 Licht',
+    devLabelRgb: '🌈 RGB-Licht',
+    devLabelFan: '🌀 Ventilator',
+    devLabelOutlet: '🔌 Steckdose',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensor',
   },
   fr: {
     lang: 'Français', flag: 'fr',
@@ -6065,7 +6223,7 @@ const HSRC_TRANSLATIONS = {
     edDisplay: '👁 Options d\'affichage',
     edLang: '🌐 Langue',
     bgPresets: 'Préréglage',
-    edBgAlpha: '🔆 Opacité', edBgTransparent: 'Transparent', edBgSolid: 'Solide',
+    edBgAlpha: '🔆 Opacité', edBgBlur: '💎 Effet Verre Flouté', edBgBlurNone: 'Aucun', edBgBlurMax: 'Max', edBgTransparent: 'Transparent', edBgSolid: 'Solide',
     color1: 'Couleur 1 (haut)', color2: 'Couleur 2 (bas)',
     edTemp: '🌡 Capteur de température (sensor.*)',
     edHumi: '💧 Capteur d\'humidité (sensor.*)',
@@ -6143,12 +6301,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Retour',
     tvInput: 'Source',
     tvVolLabel: 'VOLUME',
+    devDen: '💡 Lumière Principale',
+    devDecor: '✨ Lumière Déco',
+    devHien: '🏮 Lumière Véranda',
+    devRgb: '🌈 Lumière RGB',
+    devQuat: '🌀 Ventilateur Plafond',
+    devOcam: '🔌 Prise Électrique',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 Télécommande TV',
+    devAc: '❄️ Climatisation',
+    devNamePlaceholder: 'Nom du dispositif (ex: Lumière chambre)',
+    devLabelLight: '💡 Lumière',
+    devLabelRgb: '🌈 Lumière RGB',
+    devLabelFan: '🌀 Ventilateur',
+    devLabelOutlet: '🔌 Prise',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Capteur',
   },
   nl: {
     lang: 'Nederlands', flag: 'nl',
     edTitle: 'Kantoorkaart', edEntities: '📡 Entiteiten', edBg: '🎨 Achtergrond',
     edDisplay: '👁 Weergaveopties', edLang: '🌐 Taal', bgPresets: 'Voorinstelling',
-    edBgAlpha: '🔆 Transparantie', edBgTransparent: 'Transparant', edBgSolid: 'Ondoorzichtig',
+    edBgAlpha: '🔆 Transparantie', edBgBlur: '💎 Glas Blur Effect', edBgBlurNone: 'Geen', edBgBlurMax: 'Max', edBgTransparent: 'Transparant', edBgSolid: 'Ondoorzichtig',
     color1: 'Kleur 1 (boven)', color2: 'Kleur 2 (onder)',
     edTemp: '🌡 Temperatuursensor (sensor.*)', edHumi: '💧 Vochtigheidssensor (sensor.*)',
     edPower: '⚡ Vermogenssensor (sensor.*)', edDoor: '🚪 Deursensor (binary_sensor.*)',
@@ -6216,12 +6390,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Terug',
     tvInput: 'Ingang',
     tvVolLabel: 'VOLUME',
+    devDen: '💡 Hoofdlamp',
+    devDecor: '✨ Decorlamp',
+    devHien: '🏮 Portieeklamp',
+    devRgb: '🌈 RGB-lamp',
+    devQuat: '🌀 Plafondventilator',
+    devOcam: '🔌 Stopcontact',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Afstandsbediening',
+    devAc: '❄️ Airconditioning',
+    devNamePlaceholder: 'Apparaatnaam (bijv. Slaapkamerlamp)',
+    devLabelLight: '💡 Lamp',
+    devLabelRgb: '🌈 RGB-lamp',
+    devLabelFan: '🌀 Ventilator',
+    devLabelOutlet: '🔌 Stopcontact',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensor',
   },
   pl: {
     lang: 'Polski', flag: 'pl',
     edTitle: 'Karta Biura', edEntities: '📡 Encje', edBg: '🎨 Tło',
     edDisplay: '👁 Opcje wyświetlania', edLang: '🌐 Język', bgPresets: 'Ustawienie wstępne',
-    edBgAlpha: '🔆 Przezroczystość', edBgTransparent: 'Przezroczyste', edBgSolid: 'Pełne',
+    edBgAlpha: '🔆 Przezroczystość', edBgBlur: '💎 Efekt Szkła Blur', edBgBlurNone: 'Brak', edBgBlurMax: 'Max', edBgTransparent: 'Przezroczyste', edBgSolid: 'Pełne',
     color1: 'Kolor 1 (góra)', color2: 'Kolor 2 (dół)',
     edTemp: '🌡 Czujnik temperatury (sensor.*)', edHumi: '💧 Czujnik wilgotności (sensor.*)',
     edPower: '⚡ Czujnik mocy (sensor.*)', edDoor: '🚪 Drzwi (binary_sensor.*)',
@@ -6289,12 +6479,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Wstecz',
     tvInput: 'Źródło',
     tvVolLabel: 'GŁOŚNOŚĆ',
+    devDen: '💡 Światło Główne',
+    devDecor: '✨ Światło Dekoracyjne',
+    devHien: '🏮 Światło Wejście',
+    devRgb: '🌈 Światło RGB',
+    devQuat: '🌀 Wentylator Sufitowy',
+    devOcam: '🔌 Gniazdo Elektryczne',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 Pilot TV',
+    devAc: '❄️ Klimatyzacja',
+    devNamePlaceholder: 'Nazwa urządzenia (np. Światło sypialnia)',
+    devLabelLight: '💡 Światło',
+    devLabelRgb: '🌈 Światło RGB',
+    devLabelFan: '🌀 Wentylator',
+    devLabelOutlet: '🔌 Gniazdo',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Czujnik',
   },
   sv: {
     lang: 'Svenska', flag: 'se',
     edTitle: 'Kontorskort', edEntities: '📡 Entiteter', edBg: '🎨 Bakgrund',
     edDisplay: '👁 Visningsalternativ', edLang: '🌐 Språk', bgPresets: 'Förinställning',
-    edBgAlpha: '🔆 Genomskinlighet', edBgTransparent: 'Genomskinlig', edBgSolid: 'Solid',
+    edBgAlpha: '🔆 Genomskinlighet', edBgBlur: '💎 Glas Blur Effekt', edBgBlurNone: 'Inget', edBgBlurMax: 'Max', edBgTransparent: 'Genomskinlig', edBgSolid: 'Solid',
     color1: 'Färg 1 (övre)', color2: 'Färg 2 (nedre)',
     edTemp: '🌡 Temperatursensor (sensor.*)', edHumi: '💧 Fuktighetssensor (sensor.*)',
     edPower: '⚡ Effektsensor (sensor.*)', edDoor: '🚪 Dörrsensor (binary_sensor.*)',
@@ -6362,12 +6568,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Tillbaka',
     tvInput: 'Källa',
     tvVolLabel: 'VOLYM',
+    devDen: '💡 Huvudlampa',
+    devDecor: '✨ Dekorationslampa',
+    devHien: '🏮 Verandalampa',
+    devRgb: '🌈 RGB-lampa',
+    devQuat: '🌀 Takfläkt',
+    devOcam: '🔌 Eluttag',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Fjärrkontroll',
+    devAc: '❄️ Luftkonditionering',
+    devNamePlaceholder: 'Enhetsnamn (t.ex. Sovrumslampa)',
+    devLabelLight: '💡 Lampa',
+    devLabelRgb: '🌈 RGB-lampa',
+    devLabelFan: '🌀 Fläkt',
+    devLabelOutlet: '🔌 Eluttag',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensor',
   },
   hu: {
     lang: 'Magyar', flag: 'hu',
     edTitle: 'Irodakártya', edEntities: '📡 Entitások', edBg: '🎨 Háttér',
     edDisplay: '👁 Megjelenési beállítások', edLang: '🌐 Nyelv', bgPresets: 'Előbeállítás',
-    edBgAlpha: '🔆 Átlátszóság', edBgTransparent: 'Átlátszó', edBgSolid: 'Tömör',
+    edBgAlpha: '🔆 Átlátszóság', edBgBlur: '💎 Üveg Blur Hatás', edBgBlurNone: 'Nincs', edBgBlurMax: 'Max', edBgTransparent: 'Átlátszó', edBgSolid: 'Tömör',
     color1: 'Szín 1 (felső)', color2: 'Szín 2 (alsó)',
     edTemp: '🌡 Hőmérséklet-érzékelő (sensor.*)', edHumi: '💧 Páratartalom-érzékelő (sensor.*)',
     edPower: '⚡ Teljesítményérzékelő (sensor.*)', edDoor: '🚪 Ajtóérzékelő (binary_sensor.*)',
@@ -6435,12 +6657,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Vissza',
     tvInput: 'Forrás',
     tvVolLabel: 'HANGERŐ',
+    devDen: '💡 Fővilágítás',
+    devDecor: '✨ Dekor Lámpa',
+    devHien: '🏮 Tornác Lámpa',
+    devRgb: '🌈 RGB Lámpa',
+    devQuat: '🌀 Mennyezeti Ventilátor',
+    devOcam: '🔌 Aljzat',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Távirányító',
+    devAc: '❄️ Légkondicionáló',
+    devNamePlaceholder: 'Eszköz neve (pl. Hálószoba lámpa)',
+    devLabelLight: '💡 Lámpa',
+    devLabelRgb: '🌈 RGB Lámpa',
+    devLabelFan: '🌀 Ventilátor',
+    devLabelOutlet: '🔌 Aljzat',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Érzékelő',
   },
   cs: {
     lang: 'Čeština', flag: 'cz',
     edTitle: 'Karta kanceláře', edEntities: '📡 Entity', edBg: '🎨 Pozadí',
     edDisplay: '👁 Možnosti zobrazení', edLang: '🌐 Jazyk', bgPresets: 'Přednastavení',
-    edBgAlpha: '🔆 Průhlednost', edBgTransparent: 'Průhledné', edBgSolid: 'Plné',
+    edBgAlpha: '🔆 Průhlednost', edBgBlur: '💎 Skleněný Blur Efekt', edBgBlurNone: 'Žádný', edBgBlurMax: 'Max', edBgTransparent: 'Průhledné', edBgSolid: 'Plné',
     color1: 'Barva 1 (horní)', color2: 'Barva 2 (dolní)',
     edTemp: '🌡 Teplotní senzor (sensor.*)', edHumi: '💧 Senzor vlhkosti (sensor.*)',
     edPower: '⚡ Senzor výkonu (sensor.*)', edDoor: '🚪 Dveřní senzor (binary_sensor.*)',
@@ -6508,12 +6746,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Zpět',
     tvInput: 'Vstup',
     tvVolLabel: 'HLASITOST',
+    devDen: '💡 Hlavní Světlo',
+    devDecor: '✨ Dekorativní Světlo',
+    devHien: '🏮 Světlo Veranda',
+    devRgb: '🌈 RGB Světlo',
+    devQuat: '🌀 Stropní Ventilátor',
+    devOcam: '🔌 Zásuvka',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Dálkový Ovladač',
+    devAc: '❄️ Klimatizace',
+    devNamePlaceholder: 'Název zařízení (např. Světlo ložnice)',
+    devLabelLight: '💡 Světlo',
+    devLabelRgb: '🌈 RGB Světlo',
+    devLabelFan: '🌀 Ventilátor',
+    devLabelOutlet: '🔌 Zásuvka',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Senzor',
   },
   it: {
     lang: 'Italiano', flag: 'it',
     edTitle: 'Scheda Ufficio', edEntities: '📡 Entità', edBg: '🎨 Sfondo',
     edDisplay: '👁 Opzioni di visualizzazione', edLang: '🌐 Lingua', bgPresets: 'Predefinito',
-    edBgAlpha: '🔆 Opacità', edBgTransparent: 'Trasparente', edBgSolid: 'Solido',
+    edBgAlpha: '🔆 Opacità', edBgBlur: '💎 Effetto Vetro Sfocato', edBgBlurNone: 'Nessuno', edBgBlurMax: 'Max', edBgTransparent: 'Trasparente', edBgSolid: 'Solido',
     color1: 'Colore 1 (sopra)', color2: 'Colore 2 (sotto)',
     edTemp: '🌡 Sensore di temperatura (sensor.*)', edHumi: '💧 Sensore di umidità (sensor.*)',
     edPower: '⚡ Sensore di potenza (sensor.*)', edDoor: '🚪 Sensore porta (binary_sensor.*)',
@@ -6581,12 +6835,28 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Indietro',
     tvInput: 'Sorgente',
     tvVolLabel: 'VOLUME',
+    devDen: '💡 Luce Principale',
+    devDecor: '✨ Luce Decorativa',
+    devHien: '🏮 Luce Veranda',
+    devRgb: '🌈 Luce RGB',
+    devQuat: '🌀 Ventilatore Soffitto',
+    devOcam: '🔌 Presa Elettrica',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 Telecomando TV',
+    devAc: '❄️ Climatizzatore',
+    devNamePlaceholder: 'Nome dispositivo (es. Luce camera da letto)',
+    devLabelLight: '💡 Luce',
+    devLabelRgb: '🌈 Luce RGB',
+    devLabelFan: '🌀 Ventilatore',
+    devLabelOutlet: '🔌 Presa',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensore',
   },
   pt: {
     lang: 'Português', flag: 'pt',
     edTitle: 'Cartão do Escritório', edEntities: '📡 Entidades', edBg: '🎨 Plano de fundo',
     edDisplay: '👁 Opções de exibição', edLang: '🌐 Idioma', bgPresets: 'Predefinição',
-    edBgAlpha: '🔆 Opacidade', edBgTransparent: 'Transparente', edBgSolid: 'Sólido',
+    edBgAlpha: '🔆 Opacidade', edBgBlur: '💎 Efeito Vidro Desfocado', edBgBlurNone: 'Nenhum', edBgBlurMax: 'Máx', edBgTransparent: 'Transparente', edBgSolid: 'Sólido',
     color1: 'Cor 1 (cima)', color2: 'Cor 2 (baixo)',
     edTemp: '🌡 Sensor de temperatura (sensor.*)', edHumi: '💧 Sensor de humidade (sensor.*)',
     edPower: '⚡ Sensor de potência (sensor.*)', edDoor: '🚪 Sensor de porta (binary_sensor.*)',
@@ -6654,6 +6924,125 @@ const HSRC_TRANSLATIONS = {
     tvBack: 'Voltar',
     tvInput: 'Fonte',
     tvVolLabel: 'VOLUME',
+    devDen: '💡 Luz Principal',
+    devDecor: '✨ Luz Decorativa',
+    devHien: '🏮 Luz Varanda',
+    devRgb: '🌈 Luz RGB',
+    devQuat: '🌀 Ventilador Teto',
+    devOcam: '🔌 Tomada',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 Controle TV',
+    devAc: '❄️ Ar Condicionado',
+    devNamePlaceholder: 'Nome do dispositivo (ex: Luz quarto)',
+    devLabelLight: '💡 Luz',
+    devLabelRgb: '🌈 Luz RGB',
+    devLabelFan: '🌀 Ventilador',
+    devLabelOutlet: '🔌 Tomada',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Sensor',
+  },
+sl: {
+    lang: 'Slovenščina', flag: 'si',
+    edTitle: 'HA Smart Room Card',
+    edEntities: '📡 Entitete (Entity)',
+    edBg: '🎨 Ozadje',
+    edDisplay: '👁 Prikaz',
+    edLang: '🌐 Jezik',
+    bgPresets: 'Prednastavitve',
+    edBgAlpha: '🔆 Prozornost', edBgBlur: '💎 Hiệu ứng Glass Blur', edBgBlurNone: 'Brez', edBgBlurMax: 'Največ', edBgTransparent: 'Prozorno', edBgSolid: 'Polno',
+    color1: 'Barva 1 (zgoraj)', color2: 'Barva 2 (spodaj)',
+    edTemp: '🌡 Senzor temperature (sensor.*)',
+    edHumi: '💧 Senzor vlažnosti (sensor.*)',
+    edPower: '⚡ Senzor moči (sensor.*)',
+    edDoor: '🚪 Senzor vrat (binary_sensor.*)',
+    edMotion: '🚶 Senzor gibanja (binary_sensor.*)',
+    edTempOut: '🌤 Zunanja temperatura (sensor.*)',
+    edHumiOut: '💧 Zunanja vlažnost (sensor.*)',
+    edDen: '💡 Glavna luč (light.*)',
+    edDecor: '✨ Dekorativna luč (switch.*)',
+    edRgb: '🌈 RGB luč (light.*)',
+    edHien: '🏮 Luč na terasi (switch.*)',
+    edQuat: '🌀 Stropni ventilator (switch.*)',
+    edOcam: '🔌 Vtičnica (switch.*)',
+    edTv: '📺 Smart TV (media_player.*)',
+    edTvRemote: '📱 TV Daljinec (remote.*)',
+    edAc: '❄️ Klimatska naprava (climate.*)',
+    edShowScore: 'Ocena prostora', edShowScoreDesc: 'Prikaži polje za izračun udobja',
+    edShowGraph: 'Graf temperature', edShowGraphDesc: 'Prikaži graf za zadnjih 6 ur',
+    edShowSmartBar: 'Pametna vrstica s predlogi', edShowSmartBarDesc: 'Prikaži predloge za varčevanje z energijo',
+    edShowAutoMode: 'Samodejni način', edShowAutoModeDesc: 'Prikaži gumb za samodejni izklop ob odsotnosti',
+    edShowEnvHint: 'Nasveti za okolje', edShowEnvHintDesc: 'Prikaži primerjavo temperature znotraj-zunaj',
+    edShowTimeline: 'Časovnica naprav', edShowTimelineDesc: 'Prikaži časovni graf za klimo, vrata, gibanje',
+    colorLabel: 'Napredne barve',
+    edColorsReset: '↩ Ponastavi barve na privzeto',
+    edRoomTitle: '🏷 Prikazano ime (Smart Home)',
+    edRoomTitlePlaceholder: 'npr. Delovna soba, Spalnica...',
+    edSensorsTitle: 'Senzorji v prostoru',
+    edAcTitle: 'Klima',
+    edOutdoorTitle: 'Zunanji senzorji',
+    edAcEntity: '❄️ Entiteta klime (climate.*)',
+    edDevicesTitle: 'Naprave',
+    edAddDevPlaceholder: '— Izberi vrsto naprave —',
+    edAddDevLight: '💡 Navadna luč (light)',
+    edAddDevRgb: '🌈 RGB luč (light + učinki)',
+    edAddDevFan: '🌀 Ventilator (switch)',
+    edAddDevOutlet: '🔌 Vtičnica (switch + potrditev)',
+    edAddDevTv: '📺 TV (media_player)',
+    edAddDevSensor: '📡 Senzor (sensor)',
+    edAddBtn: '+ Dodaj',
+    edNoDevices: 'Ni naprav. Pritisni "+ Dodaj" za začetek.',
+    edAutoTitle: 'Avtomatizacija',
+    edSyncTitle: '🔄 Način sinhronizacije',
+    edSyncLocal: '💾 Lokalno',
+    edSyncLocalSimple: 'PREPROSTO',
+    edSyncLocalDesc: 'Shranjeno v brskalniku — preprosto, brez dodatne namestitve',
+    edSyncHelpers: '🔘 HA Helperji',
+    edSyncHelpersDesc: 'Sinhronizacija med napravami prek input_boolean + input_number — zahteva ročno ustvarjanje helperjev',
+    edSyncIntegration: '🧠 HA Smart Room Integracija',
+    edSyncIntRecommended: 'PRIPOROČENO',
+    edSyncIntDesc: 'Deluje na strani strežnika — deluje tudi, ko je brskalnik zaprt, popolna sinhronizacija naprav',
+    edSyncIntSetup: '✅ <b>Enkratna nastavitev:</b>',
+    edSyncIntStep1: 'HACS → Frontend → ⋮ → Custom repositories',
+    edSyncIntStep1b: 'URL: <code>https://github.com/doanlong1412/ha-smart-room-card</code> → Tip: <b>Integration</b>',
+    edSyncIntStep2: 'Poišči <b>HA Smart Room</b> → Namesti → Ponovni zagon HA',
+    edSyncIntStep3: 'Nastavitve → Naprave in storitve → Dodaj integracijo → <b>HA Smart Room</b>',
+    edSyncIntStep4: 'Vrni se na kartico, pritisni Shrani — kartica se samodejno registrira ✨',
+    edSyncHelpersWarn: '⚠️ Pred uporabo ustvarite 2 Helperja v HA.',
+    edHelperBool: '🔘 entiteta input_boolean',
+    edHelperNum: '🔢 entiteta input_number',
+    edDelayTitle: '⏱️ Odštevanje časa',
+    edDelayLabel: 'Izklop po koliko minutah odsotnosti',
+    edDelayUnit: 'min',
+    edAutoDevTitle: '🔌 Naprave za samodejni izklop',
+    edAutoDevDesc: 'Odznači naprave, ki jih NE želiš samodejno izklopiti',
+    edSensorsSection: '📡 Senzorji in naprave',
+    tvControlBtn: '📺 Upravljanje',
+    tvModalTitle: '📺 Upravljanje TV',
+    tvPower: 'Napajanje',
+    tvMute: 'Nemo',
+    tvVolDown: 'Glasnost −',
+    tvVolUp: 'Glasnost +',
+    tvHome: 'Domov',
+    tvMenu: 'Meni',
+    tvBack: 'Nazaj',
+    tvInput: 'Vhod',
+    tvVolLabel: 'GLASNOST',
+    devDen: '💡 Glavna Luč',
+    devDecor: '✨ Dekorativna Luč',
+    devHien: '🏮 Luč na terasi',
+    devRgb: '🌈 RGB Luč',
+    devQuat: '🌀 Stropni Ventilator',
+    devOcam: '🔌 Vtičnica',
+    devTv: '📺 Smart TV',
+    devTvRemote: '📱 TV Daljinec',
+    devAc: '❄️ Klima',
+    devNamePlaceholder: 'Ime naprave (npr. Luč v spalnici)',
+    devLabelLight: '💡 Luč',
+    devLabelRgb: '🌈 RGB Luč',
+    devLabelFan: '🌀 Ventilator',
+    devLabelOutlet: '🔌 Vtičnica',
+    devLabelTv: '📺 TV',
+    devLabelSensor: '📡 Senzor',
   },
 };
 
@@ -6777,18 +7166,34 @@ class HASmartRoomCardEditor extends HTMLElement {
 </div>`;
   }
 
-  // ── Default device definitions ────────────────────────────────────────────
+  // ── Default device definitions (language-aware) ──────────────────────────
+  _getDefaultDevices(t) {
+    t = t || this.t;
+    return [
+      { id: 'den',      label: t.devDen      || '💡 Main Light',        entityKey: 'den_entity',       domain: 'light',        type: 'den'    },
+      { id: 'decor',    label: t.devDecor    || '✨ Decor Light',        entityKey: 'decor_entity',     domain: 'light,switch', type: 'den'    },
+      { id: 'hien',     label: t.devHien     || '🏮 Porch Light',        entityKey: 'hien_entity',      domain: 'light,switch', type: 'den'    },
+      { id: 'rgb',      label: t.devRgb      || '🌈 RGB Light',          entityKey: 'rgb_entity',       domain: 'light',        type: 'rgb'    },
+      { id: 'quat',     label: t.devQuat     || '🌀 Ceiling Fan',        entityKey: 'quat_entity',      domain: 'fan,switch',   type: 'quat'   },
+      { id: 'ocam',     label: t.devOcam     || '🔌 Power Outlet',       entityKey: 'ocam_entity',      domain: 'switch',       type: 'sensor' },
+      { id: 'tv',       label: t.devTv       || '📺 Smart TV',           entityKey: 'tv_entity',        domain: 'media_player', type: 'tv'     },
+      { id: 'tvRemote', label: t.devTvRemote || '📱 TV Remote',          entityKey: 'tv_remote_entity', domain: 'remote',       type: 'tv'     },
+      { id: 'ac',       label: t.devAc       || '❄️ Air Conditioner',    entityKey: 'ac_entity',        domain: 'climate',      type: 'sensor' },
+    ];
+  }
+
+  // Keep static getter for backward compat (returns English labels)
   static get DEFAULT_DEVICES() {
     return [
-      { id: 'den',      label: '💡 Đèn Chính',  entityKey: 'den_entity',       domain: 'light',        type: 'den'    },
-      { id: 'decor',    label: '✨ Đèn Decor',   entityKey: 'decor_entity',     domain: 'light,switch', type: 'den'    },
-      { id: 'hien',     label: '🏮 Đèn Hiên',   entityKey: 'hien_entity',      domain: 'light,switch', type: 'den'    },
-      { id: 'rgb',      label: '🌈 Đèn RGB',    entityKey: 'rgb_entity',       domain: 'light',        type: 'rgb'    },
-      { id: 'quat',     label: '🌀 Quạt Trần',  entityKey: 'quat_entity',      domain: 'fan,switch',   type: 'quat'   },
-      { id: 'ocam',     label: '🔌 Ổ Cắm',     entityKey: 'ocam_entity',      domain: 'switch',       type: 'sensor' },
-      { id: 'tv',       label: '📺 Smart TV',   entityKey: 'tv_entity',        domain: 'media_player', type: 'tv'     },
-      { id: 'tvRemote', label: '📱 TV Remote',  entityKey: 'tv_remote_entity', domain: 'remote',       type: 'tv'     },
-      { id: 'ac',       label: '❄️ Điều Hòa',   entityKey: 'ac_entity',        domain: 'climate',      type: 'sensor' },
+      { id: 'den',      label: '💡 Main Light',        entityKey: 'den_entity',       domain: 'light',        type: 'den'    },
+      { id: 'decor',    label: '✨ Decor Light',        entityKey: 'decor_entity',     domain: 'light,switch', type: 'den'    },
+      { id: 'hien',     label: '🏮 Porch Light',        entityKey: 'hien_entity',      domain: 'light,switch', type: 'den'    },
+      { id: 'rgb',      label: '🌈 RGB Light',          entityKey: 'rgb_entity',       domain: 'light',        type: 'rgb'    },
+      { id: 'quat',     label: '🌀 Ceiling Fan',        entityKey: 'quat_entity',      domain: 'fan,switch',   type: 'quat'   },
+      { id: 'ocam',     label: '🔌 Power Outlet',       entityKey: 'ocam_entity',      domain: 'switch',       type: 'sensor' },
+      { id: 'tv',       label: '📺 Smart TV',           entityKey: 'tv_entity',        domain: 'media_player', type: 'tv'     },
+      { id: 'tvRemote', label: '📱 TV Remote',          entityKey: 'tv_remote_entity', domain: 'remote',       type: 'tv'     },
+      { id: 'ac',       label: '❄️ Air Conditioner',    entityKey: 'ac_entity',        domain: 'climate',      type: 'sensor' },
     ];
   }
 
@@ -6802,7 +7207,7 @@ class HASmartRoomCardEditor extends HTMLElement {
 
     // Build lookup maps
     const defaultMap = {};
-    HASmartRoomCardEditor.DEFAULT_DEVICES.forEach(d => { defaultMap[d.id] = d; });
+    this._getDefaultDevices().forEach(d => { defaultMap[d.id] = d; });
     const extraMap = {};
     extras.forEach(d => { extraMap[d.id] = d; });
 
@@ -6829,7 +7234,8 @@ class HASmartRoomCardEditor extends HTMLElement {
 
     return finalOrder.map(id => {
       if (defaultMap[id]) {
-        return { ...defaultMap[id], label: labels[id] || defaultMap[id].label, isDefault: true };
+        const customLabel = labels[id];
+        return { ...defaultMap[id], label: customLabel || '', _defaultLabel: defaultMap[id].label, isDefault: true };
       }
       if (extraMap[id]) return { ...extraMap[id] };
       return null;
@@ -6849,33 +7255,37 @@ class HASmartRoomCardEditor extends HTMLElement {
     const domain = d.domain || domainMap[d.type] || '';
     const ek = d.entityKey || (d.id + '_entity');
     const mdiVal = d.mdi_icon || '';
-    // Chỉ hiển thị ô MDI cho extra devices (không phải built-in defaults)
-    const isDefault = HASmartRoomCardEditor.DEFAULT_DEVICES.some(x => x.id === d.id);
+    // Only show MDI row for extra devices (not built-in defaults)
+    const isDefault = this._getDefaultDevices().some(x => x.id === d.id);
+    const namePlaceholder = t.devNamePlaceholder || 'Device name';
     const mdiRow = !isDefault ? `
   <div class="dv-mdi-row">
-    <span class="dv-mdi-lbl">🎨 Icon MDI (tùy chọn):</span>
+    <span class="dv-mdi-lbl">🎨 MDI Icon (optional):</span>
     <input class="dv-mdi-inp" type="text" data-dv-mdi="${d.id}"
       value="${mdiVal}"
-      placeholder="vd: mdi:lightbulb  mdi:fan  mdi:power-plug"/>
+      placeholder="e.g. mdi:lightbulb  mdi:fan  mdi:power-plug"/>
     ${mdiVal ? `<ha-icon icon="${mdiVal}" style="width:20px;height:20px;flex-shrink:0;--mdi-icon-size:18px;" class="dv-mdi-preview"></ha-icon>` : ''}
   </div>` : '';
+    // For new (unsaved) devices, show empty value with translated placeholder so user knows it's editable
+    const labelVal = d.label || '';
+    const labelPlaceholder = d._defaultLabel || namePlaceholder;
     return `
 <div class="dv-row" data-dv-id="${d.id}">
   <div class="dv-top">
     <div class="dv-arrows">
-      <button class="dv-arr-btn" data-dv-up="${d.id}" title="Lên">▲</button>
-      <button class="dv-arr-btn" data-dv-dn="${d.id}" title="Xuống">▼</button>
+      <button class="dv-arr-btn" data-dv-up="${d.id}">▲</button>
+      <button class="dv-arr-btn" data-dv-dn="${d.id}">▼</button>
     </div>
-    <input class="dv-name-inp" type="text" data-dv-label="${d.id}" value="${d.label.replace(/"/g,'&quot;')}" placeholder="Tên hiển thị"/>
+    <input class="dv-name-inp" type="text" data-dv-label="${d.id}" value="${labelVal}" placeholder="${labelPlaceholder}"/>
     <button class="dv-del-btn" data-dv-del="${d.id}" title="${t.delDevTitle}">✕</button>
   </div>
   <ha-entity-picker class="dv-picker" data-key="${ek}" data-domain="${domain}" allow-custom-entity></ha-entity-picker>${d.id === 'ocam' ? `
   <div class="dv-mdi-row" style="margin-top:6px">
-    <span class="dv-mdi-lbl">⚡ Sensor công suất (tùy chọn):</span>
+    <span class="dv-mdi-lbl">⚡ Power sensor (optional):</span>
     <ha-entity-picker class="dv-picker" data-key="ocam_power_entity" data-domain="sensor" allow-custom-entity></ha-entity-picker>
   </div>` : ''}${!isDefault && d.type === 'ocam' ? `
   <div class="dv-mdi-row" style="margin-top:6px">
-    <span class="dv-mdi-lbl">⚡ Sensor công suất (tùy chọn):</span>
+    <span class="dv-mdi-lbl">⚡ Power sensor (optional):</span>
     <ha-entity-picker class="dv-picker" data-key="${d.id}_power_entity" data-domain="sensor" allow-custom-entity></ha-entity-picker>
   </div>` : ''}${mdiRow}
 </div>`;
@@ -7051,6 +7461,7 @@ class HASmartRoomCardEditor extends HTMLElement {
     background:var(--card-background-color,#fff);font-family:inherit;
     outline:none;box-sizing:border-box;
   }
+  .dv-name-inp::placeholder { color:var(--secondary-text-color);font-style:italic;opacity:0.8; }
   .dv-name-inp:focus { border-color:var(--primary-color); }
   .dv-del-btn {
     width:28px;height:28px;border:1px solid var(--divider-color);border-radius:5px;
@@ -7099,7 +7510,7 @@ class HASmartRoomCardEditor extends HTMLElement {
   <!-- ── Credit ── -->
   <div class="credit">
     🏠 <strong>HA Smart Room Card</strong>
-    <span class="credit-ver">v1.1.1 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
+    <span class="credit-ver">v1.2 · Designed by @doanlong1412 from 🇻🇳 Vietnam</span>
   </div>
 
   <!-- ── TikTok link ── -->
@@ -7319,6 +7730,18 @@ class HASmartRoomCardEditor extends HTMLElement {
           <span>0% (${t.edBgTransparent})</span><span>100% (${t.edBgSolid})</span>
         </div>
       </div>
+      <div style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:600;color:var(--secondary-text-color);">${t.edBgBlur || '💎 Glass Blur'}</span>
+          <span id="bg-blur-lbl" style="font-size:13px;font-weight:700;color:var(--primary-color);">${cfg.bg_blur !== undefined ? cfg.bg_blur : 0}px</span>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="inp-bg-blur" min="0" max="20" step="1" value="${cfg.bg_blur !== undefined ? cfg.bg_blur : 0}">
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--secondary-text-color);margin-top:3px;">
+          <span>0px (${t.edBgBlurNone || 'None'})</span><span>20px (${t.edBgBlurMax || 'Max'})</span>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -7407,6 +7830,25 @@ class HASmartRoomCardEditor extends HTMLElement {
         const lbl = sr.getElementById('bg-alpha-lbl');
         if (lbl) lbl.textContent = alphaSlider.value + '%';
         this._config = { ...this._config, bg_alpha: parseInt(alphaSlider.value) };
+        this._fire();
+      });
+    }
+
+    // Blur slider
+    const blurSlider = sr.getElementById('inp-bg-blur');
+    if (blurSlider) {
+      blurSlider.addEventListener('input', () => {
+        const lbl = sr.getElementById('bg-blur-lbl');
+        if (lbl) lbl.textContent = blurSlider.value + 'px';
+        const blurVal = parseInt(blurSlider.value);
+        this._config = { ...this._config, bg_blur: blurVal };
+        // Instant live preview: find the card's root element and update directly
+        const cardEl = document.querySelector('ha-smart-room-card') ||
+                       (this.getRootNode && this.getRootNode().host);
+        if (cardEl && cardEl.shadowRoot) {
+          const root = cardEl.shadowRoot.getElementById('root');
+          if (root) root.style.setProperty('--root-blur', blurVal + 'px');
+        }
         this._fire();
       });
     }
@@ -7555,7 +7997,7 @@ class HASmartRoomCardEditor extends HTMLElement {
         const labels = { ...(this._config.devices_labels || {}) };
         // Check if it's an extra device
         const extras  = (this._config.devices_extra || []).map(d =>
-          d.id === id ? { ...d, label: val } : d
+          d.id === id ? { ...d, label: val, _isNew: false, _defaultLabel: undefined } : d
         );
         const isExtra = (this._config.devices_extra || []).some(d => d.id === id);
         if (isExtra) {
@@ -7646,7 +8088,7 @@ class HASmartRoomCardEditor extends HTMLElement {
         const val = fresh.value.trim();
         const isExtra = (this._config.devices_extra || []).some(d => d.id === id);
         if (isExtra) {
-          const extras = (this._config.devices_extra || []).map(d => d.id === id ? { ...d, label: val } : d);
+          const extras = (this._config.devices_extra || []).map(d => d.id === id ? { ...d, label: val, _isNew: false, _defaultLabel: undefined } : d);
           this._config = { ...this._config, devices_extra: extras };
         } else {
           const labels = { ...(this._config.devices_labels || {}) };
@@ -7768,13 +8210,22 @@ class HASmartRoomCardEditor extends HTMLElement {
         const selEl = this.shadowRoot.getElementById('add-dev-type');
         const type  = selEl ? selEl.value : '';
         if (!type) return;
+        const t = this.t;
         const domainMap = { den: 'light', rgb: 'light', quat: 'fan', ocam: 'switch', tv: 'media_player', sensor: 'sensor' };
-        const labelMap  = { den: '💡 Đèn', rgb: '🌈 Đèn RGB', quat: '🌀 Quạt', ocam: '🔌 Ổ cắm', tv: '📺 TV', sensor: '📡 Cảm biến' };
+        const labelMap  = {
+          den:    t.devLabelLight   || '💡 Light',
+          rgb:    t.devLabelRgb     || '🌈 RGB Light',
+          quat:   t.devLabelFan     || '🌀 Fan',
+          ocam:   t.devLabelOutlet  || '🔌 Outlet',
+          tv:     t.devLabelTv      || '📺 TV',
+          sensor: t.devLabelSensor  || '📡 Sensor',
+        };
         const uid = type + '_' + Date.now();
-        const newDev = { id: uid, label: labelMap[type] || 'Thiết bị', entityKey: uid + '_entity', domain: domainMap[type] || 'switch', type, isDefault: false };
+        const defaultLabel = labelMap[type] || '📦 Device';
+        // _isNew: label starts empty so the placeholder (default name) is visible as ghost text
+        const newDev = { id: uid, label: '', _isNew: true, _defaultLabel: defaultLabel, entityKey: uid + '_entity', domain: domainMap[type] || 'switch', type, isDefault: false };
         const extras = [...(this._config.devices_extra || []), newDev];
         this._config = { ...this._config, devices_extra: extras };
-        // Render list ngay trước _fire() để luôn hiện ra bất kể HA có gọi setConfig đồng bộ hay không
         const listEl = this.shadowRoot.getElementById('dev-list');
         if (listEl) { listEl.innerHTML = this._renderDeviceList(this._config); this._syncPickers(); this._bindDeviceListEvents(); }
         const selAfter = this.shadowRoot.getElementById('add-dev-type');
@@ -7786,15 +8237,15 @@ class HASmartRoomCardEditor extends HTMLElement {
 
   static get DEFAULT_DEVICES() {
     return [
-      { id: 'den',      label: '💡 Đèn Chính', entityKey: 'den_entity',       domain: 'light',        type: 'den'    },
-      { id: 'decor',    label: '✨ Đèn Decor',  entityKey: 'decor_entity',     domain: 'light,switch', type: 'den'    },
-      { id: 'hien',     label: '🏮 Đèn Hiên',  entityKey: 'hien_entity',      domain: 'light,switch', type: 'den'    },
-      { id: 'rgb',      label: '🌈 Đèn RGB',   entityKey: 'rgb_entity',       domain: 'light',        type: 'rgb'    },
-      { id: 'quat',     label: '🌀 Quạt Trần', entityKey: 'quat_entity',      domain: 'fan,switch',   type: 'quat'   },
-      { id: 'ocam',     label: '🔌 Ổ Cắm',    entityKey: 'ocam_entity',      domain: 'switch',       type: 'sensor' },
-      { id: 'tv',       label: '📺 Smart TV',  entityKey: 'tv_entity',        domain: 'media_player', type: 'tv'     },
-      { id: 'tvRemote', label: '📱 TV Remote', entityKey: 'tv_remote_entity', domain: 'remote',       type: 'tv'     },
-      { id: 'ac',       label: '❄️ Điều Hòa',  entityKey: 'ac_entity',        domain: 'climate',      type: 'sensor' },
+      { id: 'den',      label: '💡 Main Light',        entityKey: 'den_entity',       domain: 'light',        type: 'den'    },
+      { id: 'decor',    label: '✨ Decor Light',        entityKey: 'decor_entity',     domain: 'light,switch', type: 'den'    },
+      { id: 'hien',     label: '🏮 Porch Light',        entityKey: 'hien_entity',      domain: 'light,switch', type: 'den'    },
+      { id: 'rgb',      label: '🌈 RGB Light',          entityKey: 'rgb_entity',       domain: 'light',        type: 'rgb'    },
+      { id: 'quat',     label: '🌀 Ceiling Fan',        entityKey: 'quat_entity',      domain: 'fan,switch',   type: 'quat'   },
+      { id: 'ocam',     label: '🔌 Power Outlet',       entityKey: 'ocam_entity',      domain: 'switch',       type: 'sensor' },
+      { id: 'tv',       label: '📺 Smart TV',           entityKey: 'tv_entity',        domain: 'media_player', type: 'tv'     },
+      { id: 'tvRemote', label: '📱 TV Remote',          entityKey: 'tv_remote_entity', domain: 'remote',       type: 'tv'     },
+      { id: 'ac',       label: '❄️ Air Conditioner',    entityKey: 'ac_entity',        domain: 'climate',      type: 'sensor' },
     ];
   }
 }
@@ -7808,15 +8259,7 @@ HASmartRoomCard.getConfigElement = function() {
 HASmartRoomCard.getStubConfig = function() {
   return {
     type: 'custom:ha-smart-room-card',
-    temp_entity:    'sensor.office_temperature',
-    humi_entity:    'sensor.office_humidity',
-    power_entity:   'sensor.cong_suat_power_office',
-    door_entity:    'binary_sensor.office_door_sensor',
-    motion_entity:  'binary_sensor.office_motion_front',
-    den_entity:     'light.den_1_office',
-    rgb_entity:     'light.wled_network',
-    ac_entity:      'climate.dieu_hoa_office',
-    language:       'vi',
+    language:          'vi',
     background_preset: 'default',
   };
 };
